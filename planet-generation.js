@@ -657,6 +657,8 @@ function generateMap() {
     }
     assignRegionElevation(mesh, map);
     // TODO: assign region moisture in a better way!
+    // I'll be adding in a version of this method: https://nickmcd.me/2018/07/10/procedural-weather-patterns/
+    // Combined with a simple prevailing winds model and major currents model
     for (let r = 0; r < mesh.numRegions; r++) {
         map.r_moisture[r] = (map.r_plate[r] % 10) / 10.0;
     }
@@ -674,10 +676,10 @@ function drawPlateVectors(u_projection, mesh, {r_xyz, r_plate, plate_vec}) {
     
     for (let r = 0; r < mesh.numRegions; r++) {
         line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
-        line_rgba.push([1, 1, 1, 1]);
+        line_rgba.push([1, 0, 0, 1]);
         line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
                                vec3.scale([], plate_vec[r_plate[r]], 2 / Math.sqrt(N))));
-        line_rgba.push([1, 0, 0, 0]);
+        line_rgba.push([1, 1, 1, 1]);
     }
 
     renderLines({
@@ -700,7 +702,7 @@ function drawPlateBoundaries(u_projection, mesh, {t_xyz, r_plate}) {
                 outer_t = mesh.s_outer_t(s);
             line_xyz.push(t_xyz.slice(3 * inner_t, 3 * inner_t + 3),
                           t_xyz.slice(3 * outer_t, 3 * outer_t + 3));
-            line_rgba.push([1, 1, 1, 1], [1, 1, 1, 1]);
+            line_rgba.push([1, 0, 0, 1], [1, 0, 0, 1]);
         }
     }
     renderLines({
