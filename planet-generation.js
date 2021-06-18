@@ -35,6 +35,8 @@ let N = 10000;
 let P = 20;
 let jitter = 0.75;
 let rotation = -1;
+let tilt = 0;
+let procession = -1.5;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
@@ -43,6 +45,8 @@ window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
 window.setRotation = newRotation => { rotation = newRotation; draw(); };
+window.setTilt     = newTilt     => { tilt = newTilt; draw(); };
+window.setProcession = newProcession => { procession = newProcession; draw(); console.log(procession); };
 window.setDrawMode = newMode => { drawMode = newMode; draw(); };
 window.setDrawPlateVectors = flag => { draw_plateVectors = flag; draw(); };
 window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); };
@@ -740,13 +744,38 @@ function drawRivers(u_projection, mesh, {t_xyz, s_flow}) {
     });
 }
 
+
+function drawAxis(u_projection, mesh) {
+    let line_xyz = [], line_rgba = [];
+
+    let radius = 1;
+
+    line_xyz.push([0,0,radius], [0,0,1.5*radius]);
+    line_rgba.push([0,0,0,1], [1,0,0,1]);
+
+    line_xyz.push([0,0,-radius], [0,0,-1.5*radius]);
+    line_rgba.push([0,0,0,1], [1,0,0,1]);
+        
+    renderLines({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: line_xyz,
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
+
 let _draw_pending = false;
 function _draw() {
     let u_pointsize = 0.1 + 100 / Math.sqrt(N);
     let u_projection = mat4.create();
     mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
-    mat4.rotate(u_projection, u_projection, -rotation, [0.1, 1, 0]);
-    mat4.rotate(u_projection, u_projection, -Math.PI/2+0.2, [1, 0, 0]);
+    
+    mat4.rotate(u_projection, u_projection, -procession, [1, 0, 0]);
+    mat4.rotate(u_projection, u_projection, -tilt, [0, 1, 0]);
+    mat4.rotate(u_projection, u_projection, -rotation, [0, 0, 1]);
+    // mat4.rotate(u_projection, u_projection, -Math.PI/2, [1, 0, 0]);
 
     function r_color_fn(r) {
         let m = map.r_moisture[r];
@@ -779,6 +808,8 @@ function _draw() {
     if (draw_plateBoundaries) {
         drawPlateBoundaries(u_projection, mesh, map);
     }
+    
+    drawAxis(u_projection, mesh);
     
     // renderPoints({
     //     u_projection,
