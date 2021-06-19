@@ -641,12 +641,140 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
  * Weaather
  */
 
- function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
+function crossProduct(a, b) {
+    // https://www.mathsisfun.com/algebra/vectors-cross-product.html
+    let [ax, ay, az] = a;
+    let [bx, by, bz] = b;
+
+    return [
+        ay*bz - az*by,
+        az*bx - ax*bz,
+        ax*by - ay*bx
+    ];
+}
+
+function magnitude(v) {
+    let [x, y, z] = v;
+    return Math.sqrt(x*x, y*y, z*z);
+}
+
+function dot(a, b) {
+    let [ax, ay, az] = a;
+    let [bx, by, bz] = b;
+
+    return ax*bx + ay*by + az*bz;
+}
+
+function skewSymmetricCrossProductMatrix(v) {
+    let [v1, v2, v3] = v;
+
+    return [
+        [  0, -v3,  v2],
+        [ v3,   0, -v1],
+        [-v2,  v1,   0]
+    ];
+}
+
+function matrixMultipy(A, B) {
+    let R = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            for (let i = 0; i < 3; i++) {
+                R[r][c] += A[r][i] * B[i][c];
+            }
+        }
+    }
+
+    return R;
+}
+
+function matrixScale(A, s) {
+    let R = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            R[r][c] *= s;
+        }
+    }
+
+    return R;
+}
+
+function applyTransformationMatrix(R, v) {
+    let res = [0, 0, 0];
+
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            res[r] += R[r][c] * v[r];
+        }
+    }
+
+    return res;
+}
+
+function matrixSum(A, B, C) {
+    let R = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            R[r][c] = A[r][c] + B[r][c] + C[r][c];
+        }
+    }
+
+    return R;
+}
+
+// takes a 2d vector vec2d on a plane with normal normal3d and returns
+// that vector's equivalent in 3d cartesian coordinates
+function surface2DToAbsolute3D(vec2d, normal3d) {
+    // first find the rotation matrix that will rotate [0, 0, 1] onto normal3d
+    // then apply that rotation matrix to vec2d
+
+    // https://math.stackexchange.com/a/476311
+    let a = [0, 0, 1];
+    let b = normal3d;
+
+    let v = crossProduct(a, b);
+    //let s = magnitude(v);
+    let c = dot(a, b);
+
+    let v_x = skewSymmetricCrossProductMatrix(v);
+
+    let I = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1]
+    ];
+
+    let v_x_squared = matrixMultipy(v_x, v_x);
+
+    let R = matrixSum(I, v_x, matrixScale(v_x_squared, 1 / (1+c)));
+
+    // R is our rotation matrix
+    let [x, y] = vec2d;
+    
+    return applyTransformationMatrix(R, [x, y, 0]);
+}
+
+function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const epsilon = 1e-3;
     const planetRadius = 1;
     let {numRegions} = mesh;
-    r_wind = new Array(numRegions);
-    r_wind.fill([0, 0])
+    // r_wind = new Array(numRegions);
+    //r_wind.fill([0, 0, 0]);
 
     // TODO: make all wind vectors 3D, by converting them to be relative to the surface normal
     // do this by assuming all 2D vectors are [x, y, 0] and rotate them however much it takes to rotate
@@ -663,20 +791,24 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
             lon_deg = (180/Math.PI) * Math.atan2(y / x);
         
         if (0 < lat_deg < 30) {
-            let trigterm = (Math.PI * (lat_deg-0)) / (2 * 30)
-            r_wind[r] = [-Math.cos(trigterm), -Math.sin(trigterm)]
+            let trigterm = (Math.PI * (lat_deg-0)) / (2 * 30);
+            r_wind[r] = surface2DToAbsolute3D([-Math.cos(trigterm), -Math.sin(trigterm)], [x, y, z]);
         } else
         if (30 < lat_Deg < 60) {
-            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30)
-            r_wind[r] = [Math.sin(trigterm), Math.cos(trigterm)]
+            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
+            r_wind[r] = surface2DToAbsolute3D([Math.sin(trigterm), Math.cos(trigterm)], [x, y, z]);
         } else 
         if (60 < lat_deg < 90) {
-            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30)
-            r_wind[r] = [-Math.cos(trigterm), -Math.sin(trigterm)]
+            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
+            r_wind[r] = surface2DToAbsolute3D([-Math.cos(trigterm), -Math.sin(trigterm)], [x, y, z]);
         }
 
         // TODO: southern hemisphere
     }
+
+    // TODO: noisify
+
+    // TODO: slowdown according to elevation change
 }
 
 
@@ -910,6 +1042,8 @@ function drawLongitudeLines(u_projection, lonDeg) {
 function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
     let line_xyz = [], line_rgba = [];
     
+    console.log(r_wind)
+
     for (let r = 0; r < mesh.numRegions; r++) {
         line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
         line_rgba.push([0.3, 0.3, 1, 1]);
@@ -971,7 +1105,7 @@ function _draw() {
         drawPlateBoundaries(u_projection, mesh, map);
     }
     
-    //drawWindVectors(u_projection, mesh, map);
+    drawWindVectors(u_projection, mesh, map);
 
     drawAxis(u_projection);
 
