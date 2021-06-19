@@ -745,7 +745,7 @@ function drawRivers(u_projection, mesh, {t_xyz, s_flow}) {
 }
 
 
-function drawAxis(u_projection, mesh) {
+function drawAxis(u_projection) {
     let line_xyz = [], line_rgba = [];
 
     let radius = 1;
@@ -764,6 +764,45 @@ function drawAxis(u_projection, mesh) {
         a_rgba: line_rgba,
         count: line_xyz.length,
     });
+}
+
+function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
+    if (Math.abs(latDeg) >= 90) return;
+
+    let line_xyz = [], line_rgba = [];
+
+    let latRad     = latDeg     / 180.0 * Math.PI,
+        lonStepRad = lonStepDeg / 180.0 * Math.PI;
+    let lonRad = 0;
+    
+    let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
+                     Math.cos(latRad) * Math.sin(lonRad),
+                     Math.sin(latRad)];
+
+    for (let lonRad = lonStepRad; lonRad <= 2*Math.PI + lonStepRad; lonRad += lonStepRad) {
+        let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
+                          Math.cos(latRad) * Math.sin(lonRad),
+                          Math.sin(latRad)];
+
+        line_xyz.push(lastPoint, nextPoint);
+        line_rgba.push([1,0,0,1], [1,0,0,1]);
+
+        lastPoint = nextPoint;
+    }
+
+    renderLines({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: line_xyz,
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
+
+function drawLattitudeLines(u_projection, latDeg, lonStepDeg = 10) {
+    drawLattitudeLine(u_projection,  latDeg, lonStepDeg);
+    drawLattitudeLine(u_projection, -latDeg, lonStepDeg);
 }
 
 let _draw_pending = false;
@@ -809,7 +848,11 @@ function _draw() {
         drawPlateBoundaries(u_projection, mesh, map);
     }
     
-    drawAxis(u_projection, mesh);
+    drawAxis(u_projection);
+
+    drawLattitudeLines(u_projection, 0);
+    // drawLattitudeLines(u_projection, 30);
+    // drawLattitudeLines(u_projection, 60);
     
     // renderPoints({
     //     u_projection,
