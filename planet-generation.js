@@ -766,7 +766,7 @@ function drawAxis(u_projection) {
     });
 }
 
-function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
+function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2, color = [1, 0, 0, 0]) {
     if (Math.abs(latDeg) >= 90) return;
 
     let line_xyz = [], line_rgba = [];
@@ -785,7 +785,7 @@ function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
                           Math.sin(latRad)];
 
         line_xyz.push(lastPoint, nextPoint);
-        line_rgba.push([1,0,0,1], [1,0,0,1]);
+        line_rgba.push(color, color);
 
         lastPoint = nextPoint;
     }
@@ -800,9 +800,9 @@ function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
     });
 }
 
-function drawLattitudeLines(u_projection, latDeg, lonStepDeg = 10) {
-    drawLattitudeLine(u_projection,  latDeg, lonStepDeg);
-    drawLattitudeLine(u_projection, -latDeg, lonStepDeg);
+function drawLattitudeLines(u_projection, latDeg,  color = [1, 0, 0, 0.3]) {
+    drawLattitudeLine(u_projection,  latDeg, 10, color);
+    drawLattitudeLine(u_projection, -latDeg, 10, color);
 }
 
 function drawLongitudeLine(u_projection, lonDeg, latStepDeg = 2) {
@@ -839,9 +839,9 @@ function drawLongitudeLine(u_projection, lonDeg, latStepDeg = 2) {
     });
 }
 
-function drawLongitudeLines(u_projection, lonDeg, latStepDeg = 10) {
-    drawLongitudeLine(u_projection,  lonDeg, latStepDeg);
-    drawLongitudeLine(u_projection, -lonDeg, latStepDeg);
+function drawLongitudeLines(u_projection, lonDeg) {
+    drawLongitudeLine(u_projection,  lonDeg, 10);
+    drawLongitudeLine(u_projection, -lonDeg, 10);
 }
 
 let _draw_pending = false;
@@ -890,8 +890,8 @@ function _draw() {
     drawAxis(u_projection);
 
     drawLattitudeLines(u_projection, 0);
-    // drawLattitudeLines(u_projection, 30);
-    // drawLattitudeLines(u_projection, 60);
+    drawLattitudeLines(u_projection, 30, [0, 0, 0, 0.5]);
+    drawLattitudeLines(u_projection, 60, [0, 0, 0, 0.5]);
     
     drawLongitudeLines(u_projection, 0);
 
