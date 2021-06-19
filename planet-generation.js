@@ -35,11 +35,14 @@ let N = 10000;
 let P = 20;
 let jitter = 0.75;
 let rotation = -1;
-let tilt = 0;
-let procession = -1.5;
+let tilt = 0.75;
+let procession = -1.1;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
+let draw_equator = false;
+let draw_extraLat = false;
+let draw_primeMeridian = false;
 
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
@@ -50,6 +53,9 @@ window.setProcession = newProcession => { procession = newProcession; draw(); co
 window.setDrawMode = newMode => { drawMode = newMode; draw(); };
 window.setDrawPlateVectors = flag => { draw_plateVectors = flag; draw(); };
 window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); };
+window.setDrawEquator = flag => { draw_equator = flag; draw(); };
+window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
+window.setDrawPrimeMeridian = flag => { draw_primeMeridian = flag; draw(); };
 
 const renderPoints = regl({
     frag: `
@@ -889,11 +895,17 @@ function _draw() {
     
     drawAxis(u_projection);
 
-    drawLattitudeLines(u_projection, 0);
-    drawLattitudeLines(u_projection, 30, [0, 0, 0, 0.5]);
-    drawLattitudeLines(u_projection, 60, [0, 0, 0, 0.5]);
+    if (draw_equator || draw_extraLat) {
+        drawLattitudeLines(u_projection, 0, [0.6, 0, 0, 1]);
+    }
+    if (draw_extraLat) {
+        drawLattitudeLines(u_projection, 30, [0.2, 0, 0, 1]);
+        drawLattitudeLines(u_projection, 60, [0.2, 0, 0, 1]);
+    }
+    if (draw_primeMeridian) {
+        drawLongitudeLines(u_projection, 0);
+    }
     
-    drawLongitudeLines(u_projection, 0);
 
 
     // renderPoints({
