@@ -470,6 +470,8 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
        region from a different plate that pushes most into this one*/
     for (let current_r = 0; current_r < numRegions; current_r++) {
         let bestCompression = Infinity, best_r = -1;
+        let worstCompression = -Infinity, worst_r = -1;
+
         mesh.r_circulate_r(r_out, current_r);
         for (let neighbor_r of r_out) {
             if (r_plate[current_r] !== r_plate[neighbor_r]) {
@@ -487,8 +489,14 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
                     best_r = neighbor_r;
                     bestCompression = compression;
                 }
+
+                if (compression > worstCompression) {
+                    worst_r = neighbor_r;
+                    worstCompression = compression;
+                }
             }
         }
+
         if (best_r !== -1) {
             /* at this point, bestCompression tells us how much closer
                we are getting to the region that's pushing into us the most */
@@ -503,7 +511,19 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
             }
         }
 
-        // TODO: divergent plate boundaries - trenches and canyon seas
+        if (worst_r !== -1) {
+            /* at this point, worstCompression tells us how much farther away
+               we are getting from the region that's pulling away from us the most */
+            let separated = -worstCompression > COLLISION_THRESHOLD * deltaTime;
+            if (plate_is_ocean.has(current_r) && plate_is_ocean.has(best_r)) {
+                // (separated? trench_r : ocean_r).add(current_r); // TODO: trench_r
+                ocean_r.add(current_r);
+            } else if (!plate_is_ocean.has(current_r) && !plate_is_ocean.has(best_r)) {
+                if (separated) coastline_r.add(current_r);
+            } else {
+                (separated? coastline_r : ocean_r).add(current_r);
+            }
+        }
     }
 
     // TODO: trench_r for divergent oceanic boundaries
