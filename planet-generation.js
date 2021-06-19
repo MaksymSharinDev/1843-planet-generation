@@ -548,6 +548,10 @@ function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec,
     }
 }
 
+function reigonIsWater(r_elevation, r) {
+    return r_elevation[r] < 0;
+}
+
 
 
 /**********************************************************************
