@@ -32,7 +32,7 @@ const u_colormap = regl.texture({
 
 /* UI parameters */
 let N = 10000;
-let P = 20;
+let P = 11;
 let jitter = 0.75;
 let rotation = -1;
 let tilt = 0.75;
@@ -497,13 +497,19 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
             }
         }
 
+        // let current_set = -1;
+        // TODO: replace all "coastline_r" with current_set = 2, etc
+        // mountain_r = 3
+        // coastline_r = 2
+        // ocean_r = 1
+        // trench_r = 0
+
         if (best_r !== -1) {
             /* at this point, bestCompression tells us how much closer
                we are getting to the region that's pushing into us the most */
             let collided = bestCompression > COLLISION_THRESHOLD * deltaTime;
             if (plate_is_ocean.has(current_r) && plate_is_ocean.has(best_r)) {
                 (collided? coastline_r : ocean_r).add(current_r);
-                // ocean_r.add(current_r);
             } else if (!plate_is_ocean.has(current_r) && !plate_is_ocean.has(best_r)) {
                 if (collided) mountain_r.add(current_r);
             } else {
@@ -524,6 +530,12 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
                 (separated? coastline_r : ocean_r).add(current_r);
             }
         }
+
+        // if (current_set === 3) mountain_r.add(current_r);
+        // if (current_set === 2) coastline_r.add(current_r);
+        // if (current_set === 1) ocean_r.add(current_r);
+        // if (current_set === 0) trench_r.add(current_r);
+        
     }
 
     // TODO: trench_r for divergent oceanic boundaries
