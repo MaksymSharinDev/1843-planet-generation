@@ -779,7 +779,7 @@ function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
                      Math.cos(latRad) * Math.sin(lonRad),
                      Math.sin(latRad)];
 
-    for (let lonRad = lonStepRad; lonRad <= 2*Math.PI + lonStepRad; lonRad += lonStepRad) {
+    for (let lonRad = lonStepRad; lonRad <= 2*Math.PI; lonRad += lonStepRad) {
         let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
                           Math.cos(latRad) * Math.sin(lonRad),
                           Math.sin(latRad)];
@@ -803,6 +803,45 @@ function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2) {
 function drawLattitudeLines(u_projection, latDeg, lonStepDeg = 10) {
     drawLattitudeLine(u_projection,  latDeg, lonStepDeg);
     drawLattitudeLine(u_projection, -latDeg, lonStepDeg);
+}
+
+function drawLongitudeLine(u_projection, lonDeg, latStepDeg = 2) {
+    if (Math.abs(lonDeg) >= 90) return;
+
+    let line_xyz = [], line_rgba = [];
+
+    let lonRad     = lonDeg     / 180.0 * Math.PI,
+        latStepRad = latStepDeg / 180.0 * Math.PI;
+    let latRad = 0.5*Math.PI;
+    
+    let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
+                     Math.cos(latRad) * Math.sin(lonRad),
+                     Math.sin(latRad)];
+
+    for (let latRad = 0.5*Math.PI + latStepRad; latRad <= 1.5*Math.PI; latRad += latStepRad) {
+        let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
+                          Math.cos(latRad) * Math.sin(lonRad),
+                          Math.sin(latRad)];
+
+        line_xyz.push(lastPoint, nextPoint);
+        line_rgba.push([1,0,0,1], [1,0,0,1]);
+
+        lastPoint = nextPoint;
+    }
+
+    renderLines({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: line_xyz,
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
+
+function drawLongitudeLines(u_projection, lonDeg, latStepDeg = 10) {
+    drawLongitudeLine(u_projection,  lonDeg, latStepDeg);
+    drawLongitudeLine(u_projection, -lonDeg, latStepDeg);
 }
 
 let _draw_pending = false;
@@ -854,6 +893,9 @@ function _draw() {
     // drawLattitudeLines(u_projection, 30);
     // drawLattitudeLines(u_projection, 60);
     
+    drawLongitudeLines(u_projection, 0);
+
+
     // renderPoints({
     //     u_projection,
     //     u_pointsize,
