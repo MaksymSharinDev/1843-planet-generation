@@ -44,6 +44,8 @@ let draw_equator = false;
 let draw_extraLat = false;
 let draw_primeMeridian = false;
 
+let SEA_LEVEL = 0.2;
+
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
@@ -56,6 +58,7 @@ window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); }
 window.setDrawEquator = flag => { draw_equator = flag; draw(); };
 window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
 window.setDrawPrimeMeridian = flag => { draw_primeMeridian = flag; draw(); };
+window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); }
 
 const renderPoints = regl({
     frag: `
@@ -507,7 +510,6 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
     return {mountain_r, coastline_r, ocean_r};
 }
 
-const SEA_LEVEL = 0.2;
 function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec, /* out */ r_elevation}) {
     const epsilon = 1e-3;
     let {numRegions} = mesh;
