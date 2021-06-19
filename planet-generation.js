@@ -637,6 +637,47 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
 }
 
 
+/**********************************************************************
+ * Weaather
+ */
+
+ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
+    const epsilon = 1e-3;
+    const planetRadius = 1;
+    let {numRegions} = mesh;
+    r_wind = new Array(numRegions);
+    r_wind.fill([0, 0])
+
+    // TODO: make all wind vectors 3D, by converting them to be relative to the surface normal
+    // do this by assuming all 2D vectors are [x, y, 0] and rotate them however much it takes to rotate
+    // [0, 0, 1] to [nx, ny, nz] where nx, ny, and nz are the components of the surface normal at 
+    // the point the wind vector starts (ie the xyz of the reigon)
+    // note: the surface normal at a reigon should just be equal toits xyz coordinates
+
+    // seems like we can follow this procedure
+
+    // prevailing winds
+    for (let r = 0; r < numRegions; r++) {
+        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        let lat_deg = (180/Math.PI) * Math.acos(z / planetRadius), 
+            lon_deg = (180/Math.PI) * Math.atan2(y / x);
+        
+        if (0 < lat_deg < 30) {
+            let trigterm = (Math.PI * (lat_deg-0)) / (2 * 30)
+            r_wind[r] = [-Math.cos(trigterm), -Math.sin(trigterm)]
+        } else
+        if (30 < lat_Deg < 60) {
+            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30)
+            r_wind[r] = [Math.sin(trigterm), Math.cos(trigterm)]
+        } else 
+        if (60 < lat_deg < 90) {
+            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30)
+            r_wind[r] = [-Math.cos(trigterm), -Math.sin(trigterm)]
+        }
+
+        // TODO: southern hemisphere
+    }
+}
 
 
 /**********************************************************************
@@ -654,6 +695,7 @@ function generateMesh() {
     
     map.r_xyz = result.r_xyz;
     map.t_xyz = generateTriangleCenters(mesh, map);
+    map.r_wind = new Array(mesh.numRegions);
     map.r_elevation = new Float32Array(mesh.numRegions);
     map.t_elevation = new Float32Array(mesh.numTriangles);
     map.r_moisture = new Float32Array(mesh.numRegions);
@@ -688,6 +730,8 @@ function generateMap() {
     assignTriangleValues(mesh, map);
     assignDownflow(mesh, map);
     assignFlow(mesh, map);
+
+    assignRegionWindVectors(mesh, map);
 
     quadGeometry.setMap(mesh, map);
     draw();
@@ -863,6 +907,27 @@ function drawLongitudeLines(u_projection, lonDeg) {
     drawLongitudeLine(u_projection, -lonDeg, 10);
 }
 
+function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
+    let line_xyz = [], line_rgba = [];
+    
+    for (let r = 0; r < mesh.numRegions; r++) {
+        line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
+        line_rgba.push([0.3, 0.3, 1, 1]);
+        line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
+                               vec3.scale([], r_wind[r], 2 / Math.sqrt(N))));
+        line_rgba.push([1, 1, 1, 1]);
+    }
+
+    renderLines({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: line_xyz,
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
+
 let _draw_pending = false;
 function _draw() {
     let u_pointsize = 0.1 + 100 / Math.sqrt(N);
@@ -906,6 +971,8 @@ function _draw() {
         drawPlateBoundaries(u_projection, mesh, map);
     }
     
+    //drawWindVectors(u_projection, mesh, map);
+
     drawAxis(u_projection);
 
     if (draw_equator || draw_extraLat) {
