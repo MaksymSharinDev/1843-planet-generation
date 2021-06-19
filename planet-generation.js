@@ -492,17 +492,22 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
             let collided = bestCompression > COLLISION_THRESHOLD * deltaTime;
             if (plate_is_ocean.has(current_r) && plate_is_ocean.has(best_r)) {
                 (collided? coastline_r : ocean_r).add(current_r);
+                // ocean_r.add(current_r);
             } else if (!plate_is_ocean.has(current_r) && !plate_is_ocean.has(best_r)) {
                 if (collided) mountain_r.add(current_r);
             } else {
                 (collided? mountain_r : coastline_r).add(current_r);
             }
         }
+
+        // TODO: divergent plate boundaries - trenches and canyon seas
     }
+
+    // TODO: trench_r for divergent oceanic boundaries
     return {mountain_r, coastline_r, ocean_r};
 }
 
-
+const SEA_LEVEL = 0.2;
 function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec, /* out */ r_elevation}) {
     const epsilon = 1e-3;
     let {numRegions} = mesh;
@@ -536,6 +541,8 @@ function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec,
             r_elevation[r] = (1/a - 1/b) / (1/a + 1/b + 1/c);
         }
         r_elevation[r] += 0.1 * fbm_noise(r_xyz[3*r], r_xyz[3*r+1], r_xyz[3*r+2]);
+        
+        r_elevation[r] -= SEA_LEVEL;
     }
 }
 
