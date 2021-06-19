@@ -41,7 +41,7 @@ let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
 let draw_equator = false;
-let draw_extraLat = false;
+let draw_extraLat = true;
 let draw_primeMeridian = false;
 
 let SEA_LEVEL = 0.2;
@@ -714,7 +714,7 @@ function applyTransformationMatrix(R, v) {
 
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 3; c++) {
-            res[r] += R[r][c] * v[r];
+            res[r] += R[r][c] * v[c];
         }
     }
 
@@ -764,9 +764,10 @@ function surface2DToAbsolute3D(vec2d, normal3d) {
     let R = matrixSum(I, v_x, matrixScale(v_x_squared, 1 / (1+c)));
 
     // R is our rotation matrix
-    let [x, y] = vec2d;
-    
-    return applyTransformationMatrix(R, [x, y, 0]);
+    let [x, y] = vec2d;    
+    let result = applyTransformationMatrix(R, [x, y, 0]);
+
+    return result;
 }
 
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
