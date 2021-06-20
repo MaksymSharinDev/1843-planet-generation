@@ -771,11 +771,8 @@ function surface2DToAbsolute3D(vec2d, normal3d) {
 }
 
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
-    const epsilon = 1e-3;
     const planetRadius = 1;
     let {numRegions} = mesh;
-    // r_wind = new Array(numRegions);
-    //r_wind.fill([0, 0, 0]);
 
     // TODO: make all wind vectors 3D, by converting them to be relative to the surface normal
     // do this by assuming all 2D vectors are [x, y, 0] and rotate them however much it takes to rotate
@@ -789,22 +786,69 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let lat_deg = (180/Math.PI) * Math.acos(z / planetRadius), 
-            lon_deg = (180/Math.PI) * Math.atan2(y / x);
+            lon_deg = (180/Math.PI) * Math.atan2(y, x);
         
-        if (0 < lat_deg < 30) {
-            let trigterm = (Math.PI * (lat_deg-0)) / (2 * 30);
-            r_wind[r] = surface2DToAbsolute3D([-Math.cos(trigterm), -Math.sin(trigterm)], [x, y, z]);
-        } else
-        if (30 < lat_Deg < 60) {
-            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
-            r_wind[r] = surface2DToAbsolute3D([Math.sin(trigterm), Math.cos(trigterm)], [x, y, z]);
-        } else 
-        if (60 < lat_deg < 90) {
-            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
-            r_wind[r] = surface2DToAbsolute3D([-Math.cos(trigterm), -Math.sin(trigterm)], [x, y, z]);
-        }
+        let wind_dir = [0, 0];
 
+        // if (0 < lat_deg < 30) {
+        //     let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
+        //     wind_dir = [-Math.cos(trigterm), -Math.sin(trigterm)];
+        // } else
+        // if (30 < lat_Deg < 60) {
+        //     let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
+        //     wind_dir = [ Math.sin(trigterm),  Math.cos(trigterm)];
+        // } else 
+        // if (60 < lat_deg < 90) {
+        //     let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
+        //     wind_dir = [-Math.cos(trigterm), -Math.sin(trigterm)];
+        // }
+
+        
         // TODO: southern hemisphere
+
+
+        wind_dir = [0, 100];
+        //
+        // attempt 1 
+        //
+        //r_wind[r] = surface2DToAbsolute3D(wind_dir, [x, y, z]);
+
+        //
+        // attempt 2
+        //
+        // theta is the around, phi is the up and down
+        // theta is longitude, phi is lattitude
+        let [dtheta, dphi] = wind_dir;
+        let wind_blowsTo_lat_deg = lat_deg + dphi,
+            wind_blowsTo_lon_deg = lon_deg + dtheta;
+        let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
+            wind_blowsTo_lon_rad = (Math.PI/180) * wind_blowsTo_lon_deg;
+        
+        
+        let wind_blowsTo_x = planetRadius * Math.cos(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
+            wind_blowsTo_y = planetRadius * Math.sin(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
+            wind_blowsTo_z = planetRadius * Math.cos(wind_blowsTo_lat_rad);
+
+        let wind_x = wind_blowsTo_x - x,
+            wind_y = wind_blowsTo_y - y,
+            wind_z = wind_blowsTo_z - z;
+        
+        r_wind[r] = [wind_x, wind_y, wind_z];
+
+        // if (dot([wind_x, wind_y, wind_z], [x, y, z]) != -0.0602189418300005) {
+        //     console.log("something went wrong");
+        //     console.log(dot([wind_x, wind_y, wind_z], [x, y, z]))
+            
+        //     let wind_blowsTo_cartesian = [wind_blowsTo_x, wind_blowsTo_y, wind_blowsTo_z];
+        //     let wind_blowsTo_spherical = [wind_blowsTo_lat_deg, wind_blowsTo_lon_deg];
+        //     let wind = [wind_x, wind_y, wind_z];
+        //     let r_loc= [x, y, z];
+        //     console.log({lat_deg, lon_deg, dtheta, dphi, r_loc, wind_blowsTo_cartesian, wind_blowsTo_spherical, wind});
+            
+            
+        //     crash;
+        // }
+
     }
 
     // TODO: noisify
@@ -1042,8 +1086,6 @@ function drawLongitudeLines(u_projection, lonDeg) {
 
 function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
     let line_xyz = [], line_rgba = [];
-    
-    console.log(r_wind)
 
     for (let r = 0; r < mesh.numRegions; r++) {
         line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
@@ -1051,6 +1093,29 @@ function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
         line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
                                vec3.scale([], r_wind[r], 2 / Math.sqrt(N))));
         line_rgba.push([1, 1, 1, 1]);
+    }
+
+    renderLines({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: line_xyz,
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
+
+function drawNormalVectors(u_projection, mesh, {r_xyz}) {
+    let line_xyz = [], line_rgba = [];
+
+    for (let r = 0; r < mesh.numRegions; r++) {
+        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+
+        line_xyz.push([x, y, z]);
+        line_rgba.push([0, 0, 0, 1]);
+        line_xyz.push(vec3.add([], [x, y, z],
+                               vec3.scale([], [2*x, 2*y, 2*z], 2 / Math.sqrt(N))));
+        line_rgba.push([0, 1, 0, 1]);
     }
 
     renderLines({
@@ -1107,6 +1172,7 @@ function _draw() {
     }
     
     drawWindVectors(u_projection, mesh, map);
+    //drawNormalVectors(u_projection, mesh, map);
 
     drawAxis(u_projection);
 
