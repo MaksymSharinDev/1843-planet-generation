@@ -643,6 +643,7 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
 
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const planetRadius = 1;
+    const wind_speed = 100;
     let {numRegions} = mesh;
 
     // TODO: make all wind vectors 3D, by converting them to be relative to the surface normal
@@ -658,28 +659,31 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let lat_deg = (180/Math.PI) * Math.acos(z / planetRadius), 
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
-        
+        let abs_lat_deg = Math.abs(lat_deg);
+
         let wind_dir = [0, 0];
 
-        // if (0 < lat_deg < 30) {
-        //     let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
-        //     wind_dir = [-Math.cos(trigterm), -Math.sin(trigterm)];
-        // } else
-        // if (30 < lat_Deg < 60) {
-        //     let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
-        //     wind_dir = [ Math.sin(trigterm),  Math.cos(trigterm)];
-        // } else 
-        // if (60 < lat_deg < 90) {
-        //     let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
-        //     wind_dir = [-Math.cos(trigterm), -Math.sin(trigterm)];
-        // }
+        if (0 < abs_lat_deg < 30) {
+            let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
+            wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
+        } else
+        if (30 < abs_lat_deg < 60) {
+            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
+            wind_dir = [Math.cos(trigterm), -Math.sin(trigterm)];
+        } else 
+        if (60 < abs_lat_deg < 90) {
+            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
+            wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
+        }
 
-        
-        // TODO: southern hemisphere
+        // southern hemisphere
+        if (lat_deg < 0) {
+            wind_dir[1] = -wind_dir[1];
+        }
+
+        wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
 
 
-        wind_dir = [0, 100];
-        
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
         let [dtheta, dphi] = wind_dir;
