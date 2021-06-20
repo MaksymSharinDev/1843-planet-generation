@@ -51,6 +51,10 @@ let draw_equator = false;
 let draw_extraLat = true;
 let draw_primeMeridian = false;
 
+let draw_temperature = false;
+let draw_humidity = false;
+let draw_clouds = false;
+
 let SEA_LEVEL = 0.2;
 let SEED = 123;
 
@@ -67,7 +71,12 @@ window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); }
 window.setDrawEquator = flag => { draw_equator = flag; draw(); };
 window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
 window.setDrawPrimeMeridian = flag => { draw_primeMeridian = flag; draw(); };
-window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); }
+window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); };
+
+window.setDrawTemperature = flag => { draw_temperature = flag; draw(); };
+window.setDrawHumidity = flag => { draw_humidity = flag; draw(); };
+window.setDrawClouds = flag => { draw_clouds = flag; draw(); };
+
 
 const renderPoints = regl({
     frag: `
@@ -1149,8 +1158,7 @@ function _draw() {
     
     // gizmos
 
-    let show_temperature = true;
-    if (show_temperature) {
+    if (draw_temperature) {
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_2);
         renderTriangles({
             u_projection,

@@ -3,11 +3,17 @@
   <button onclick="setDrawMode('quads')">Quads</button>
   <button onclick="setDrawMode('centroid')">Flat</button>
   <br/>
+  <label><input type="checkbox" oninput="setDrawTemperature(this.checked)" autocomplete="off"/>Temperature map</label>
+  <label><input type="checkbox" oninput="setDrawHumidity(this.checked)" autocomplete="off"/>Humidity map</label>
+  <label><input type="checkbox" oninput="setDrawClouds(this.checked)" autocomplete="off"/>Clouds</label>
+  <br/>
   <label><input type="checkbox" oninput="setDrawPlateVectors(this.checked)" autocomplete="off"/>Plate vectors</label>
   <label><input type="checkbox" oninput="setDrawPlateBoundaries(this.checked)" autocomplete="off"/>Plate boundaries</label>
   <label><input type="checkbox" oninput="setDrawEquator(this.checked)" autocomplete="off"/>Equator</label>
   <label><input type="checkbox" checked="true" oninput="setDrawExtraLat(this.checked)" autocomplete="off"/>Extra Lattitude Lines</label>
   <label><input type="checkbox" oninput="setDrawPrimeMeridian(this.checked)" autocomplete="off"/>Prime Meridian</label>
+  <br/>
+  Controls:
   <br/>
   Number of regions:
   <input type="range" min="2" max="5" step="0.001" value="4" oninput="setN(Math.pow(10, this.valueAsNumber) | 0)" style="width:50ex" autocomplete="off"/> 
