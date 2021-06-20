@@ -769,6 +769,56 @@ function getNeighbor(mesh, current_r, dir, {r_xyz}) {
     return current_r;
 }
 
+function statsAnalysis_vectorMagnitude(vectors) {
+    let data = [];
+    for (let r = 0; r < vectors.length; r++) {
+        data.push(magnitude(vectors[r]));
+    }
+    statsAnalysis(data);
+}
+function statsAnalysis_neighborsDistance(mesh, {r_xyz}) {
+    let {numRegions} = mesh;
+    let distances = [];
+    for (let r = 0; r < numRegions; r++) {
+        let current_xyz = r_xyz.slice(3 * r, 3 * r + 3);
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        for (let neighbor_r of r_out) {
+            let neighbor_xyz = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+            let neighbor_dir = vectorSubtract(neighbor_xyz, current_xyz);
+
+            distances.push(magnitude(neighbor_dir));
+        }
+    }
+    statsAnalysis(data);
+}
+function statsAnalysis(data) {
+    let distances = data;
+
+    let average = 0;
+    let max = -1;
+    let min = 99999999;
+    for (let i = 0; i < distances.length; i++) {
+        average += distances[i];
+        max = Math.max(max, distances[i]);
+        min = Math.min(min, distances[i]);
+    }
+    average /= distances.length;
+    
+    let stddev = 0;
+    for (let i = 0; i < distances.length; i++) {
+        let tempx = distances[i] - average;
+        stddev += tempx*tempx;
+    }
+    stddev = Math.sqrt(stddev / distances.length);
+
+    console.log({min, max, average, stddev});
+}
+
+// note: the distance between neighboring tiles follows this distribution:
+// { min: 0.00008017334191617021, max: 0.08736101006422599, average: 0.04041248913501134, stddev: 0.013437966505337578 }
+// currrently, wind speeds follow this:
+// { min: 0, max: 0.09183723630842007, average: 0.01448420366929869, stddev: 0.00795346069581971 }
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const planetRadius = 1;
     const wind_speed = 100;
@@ -852,13 +902,21 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         // slowdown/speedup according to elevation change
         let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
         let oldSpeed = magnitude(r_wind[r]);
-        let newSpeed = oldSpeed + 10*(Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL));
-        let speedChangeFactor = (newSpeed / oldSpeed) / 100;
+        let newSpeed = oldSpeed + 2*10*(Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL));
+        let speedChangeFactor = oldSpeed === 0 ? 0 : (newSpeed / oldSpeed) / 100;
 
         [wind_x, wind_y, wind_z] = r_wind[r];
         r_wind[r] = [speedChangeFactor*wind_x, speedChangeFactor*wind_y, speedChangeFactor*wind_z];
         
+        [wind_x, wind_y, wind_z] = r_wind[r];
+        if (isNaN(wind_x) || isNaN(wind_y) || isNaN(wind_z)) {
+            console.log("nan issue");
+            console.log({wind_x, wind_y, wind_z});
+            wind_x = wind_y = wind_z = 0;
+        }
     }
+
+    statsAnalysis_vectorMagnitude(r_wind, numRegions);
 }
 
 function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperature}) {
@@ -932,7 +990,11 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
         r_temperature[r] = (r_temperature[r] + blownTemp[r]) / 2;
+        r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
     }
+    console.log(r_wind)
+
+    // account for cloudcover
 
     // account for rain
 
