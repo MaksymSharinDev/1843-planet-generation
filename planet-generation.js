@@ -35,6 +35,14 @@ const u_colormap_temperature = regl.texture({
     wrapT: 'clamp'
 });
 
+const u_colormap_humidity = regl.texture({
+    width: colormap.width,
+    height: colormap.height,
+    data: colormap.colormap_humidity,
+    wrapS: 'clamp',
+    wrapT: 'clamp'
+});
+
 const WATER_LEVEL = 0;
 
 /* UI parameters */
@@ -1132,6 +1140,11 @@ function _draw() {
         let t = map.r_temperature[r];
         return [0, t];
     }
+    function r_color_fn_3(r) {
+        let h = map.r_humidity[r];
+        let t = map.r_temperature[r];
+        return [0, h];
+    }
 
     // physical features
 
@@ -1163,6 +1176,17 @@ function _draw() {
         renderTriangles({
             u_projection,
             u_colormap: u_colormap_temperature,
+            u_radius: 1.001,
+            a_xyz: triangleGeometry.xyz,
+            a_tm: triangleGeometry.tm,
+            count: triangleGeometry.xyz.length / 3,
+        });
+    }
+    if (draw_humidity) {
+        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_3);
+        renderTriangles({
+            u_projection,
+            u_colormap: u_colormap_humidity,
             u_radius: 1.001,
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,

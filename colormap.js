@@ -82,3 +82,26 @@ function colormap_temperature() {
 
 exports.colormap_temperature = colormap_temperature();
 
+function colormap_humidity() {
+    const pixels = new Uint8Array(exports.width * exports.height * 4);
+
+    for (var y = 0, p = 0; y < exports.height; y++) {
+        for (let x = 0; x < exports.width; x++) {
+            let r, g, b;
+
+            r = 0;
+            g = 0;
+            b = 255*y/exports.height;
+
+            pixels[p++] = r;
+            pixels[p++] = g;
+            pixels[p++] = b;
+            pixels[p++] = 255;
+        }
+    }
+    console.log(pixels);
+    return pixels;
+}
+
+exports.colormap_temperature = colormap_temperature();
+
