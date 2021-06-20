@@ -646,18 +646,10 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const wind_speed = 100;
     let {numRegions} = mesh;
 
-    // TODO: make all wind vectors 3D, by converting them to be relative to the surface normal
-    // do this by assuming all 2D vectors are [x, y, 0] and rotate them however much it takes to rotate
-    // [0, 0, 1] to [nx, ny, nz] where nx, ny, and nz are the components of the surface normal at 
-    // the point the wind vector starts (ie the xyz of the reigon)
-    // note: the surface normal at a reigon should just be equal toits xyz coordinates
-
-    // seems like we can follow this procedure
-
     // prevailing winds
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let lat_deg = (180/Math.PI) * Math.acos(z / planetRadius), 
+        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
         let abs_lat_deg = Math.abs(lat_deg);
 
@@ -665,7 +657,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
 
         if (0 < abs_lat_deg && abs_lat_deg < 30) {
             let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
-            wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
+            wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
         } else
         if (30 < abs_lat_deg && abs_lat_deg < 60) {
             let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
@@ -673,15 +665,22 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         } else 
         if (60 < abs_lat_deg && abs_lat_deg < 90) {
             let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
-            wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
+            wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
         }
 
         // southern hemisphere
-        if (lat_deg < 0) {
+        if (z < 0) {
             wind_dir[1] = -wind_dir[1];
         }
 
         wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
+
+        // wind_dir = [0, 100]
+
+        // TODO: noisify
+
+        // TODO: slowdown according to elevation change
+
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
@@ -690,7 +689,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
             wind_blowsTo_lon_deg = lon_deg + dtheta;
         let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
             wind_blowsTo_lon_rad = (Math.PI/180) * wind_blowsTo_lon_deg;
-        
+
         
         let wind_blowsTo_x = planetRadius * Math.cos(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
             wind_blowsTo_y = planetRadius * Math.sin(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
@@ -701,6 +700,16 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
             wind_z = wind_blowsTo_z - z;
         
         r_wind[r] = [wind_x, wind_y, wind_z];
+
+        // // proof that the wind vectors are indeed tangent to the sphere
+        // // even though they draw funny:
+        // let dot = wind_x * x + wind_y * y + wind_z * z;
+        // let angle = (180/Math.PI) * Math.acos(dot/100);
+        // if (angle > 92 || angle < 88)
+        // {
+        //     console.log(angle);
+        //     crash;
+        // }
 
         // if (dot([wind_x, wind_y, wind_z], [x, y, z]) != -0.0602189418300005) {
         //     console.log("something went wrong");
@@ -717,10 +726,6 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         // }
 
     }
-
-    // TODO: noisify
-
-    // TODO: slowdown according to elevation change
 }
 
 
