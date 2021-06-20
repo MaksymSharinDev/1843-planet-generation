@@ -796,7 +796,7 @@ function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperat
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
         let abs_lat_deg = Math.abs(lat_deg);
 
-        r_temperature[r] = (1-r_elevation[r]);
+        r_temperature[r] = (1-r_elevation[r]) * lat_deg / 90;
     }
     console.log(r_temperature);
 }
