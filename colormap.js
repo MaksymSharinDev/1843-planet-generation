@@ -9,7 +9,7 @@
 exports.width = 64,
 exports.height = 64;
 
-function colormap() {
+function colormap_standard() {
     const pixels = new Uint8Array(exports.width * exports.height * 4);
 
     for (var y = 0, p = 0; y < exports.height; y++) {
@@ -57,4 +57,28 @@ function colormap() {
     return pixels;
 }
 
-exports.data = colormap();
+exports.colormap_standard = colormap_standard();
+
+function colormap_temperature() {
+    const pixels = new Uint8Array(exports.width * exports.height * 4);
+
+    for (var y = 0, p = 0; y < exports.height; y++) {
+        for (let x = 0; x < exports.width; x++) {
+            let r, g, b;
+
+            r = 255*y/exports.height;
+            g = 0;
+            b = 0;
+
+            pixels[p++] = r;
+            pixels[p++] = g;
+            pixels[p++] = b;
+            pixels[p++] = 255;
+        }
+    }
+    console.log(pixels);
+    return pixels;
+}
+
+exports.colormap_temperature = colormap_temperature();
+

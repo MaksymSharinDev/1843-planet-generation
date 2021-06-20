@@ -22,7 +22,15 @@ const regl = require('regl')({
 const u_colormap = regl.texture({
     width: colormap.width,
     height: colormap.height,
-    data: colormap.data,
+    data: colormap.colormap_standard,
+    wrapS: 'clamp',
+    wrapT: 'clamp'
+});
+
+const u_colormap_temperature = regl.texture({
+    width: colormap.width,
+    height: colormap.height,
+    data: colormap.colormap_temperature,
     wrapS: 'clamp',
     wrapT: 'clamp'
 });
@@ -162,18 +170,20 @@ void main() {
     vert: `
 precision mediump float;
 uniform mat4 u_projection;
+uniform float u_radius;
 attribute vec3 a_xyz;
 attribute vec2 a_tm;
 varying vec2 v_tm;
 void main() {
   v_tm = a_tm;
-  gl_Position = u_projection * vec4(a_xyz, 1);
+  gl_Position = u_projection * vec4(u_radius * a_xyz, 1);
 }
 `,
 
     uniforms: {
-        u_colormap: u_colormap,
+        u_colormap: regl.prop('u_colormap'),
         u_projection: regl.prop('u_projection'),
+        u_radius: regl.prop('u_radius'),
     },
 
     count: regl.prop('count'),
@@ -220,7 +230,7 @@ void main() {
 `,
 
     uniforms: {
-        u_colormap: u_colormap,
+        u_colormap: regl.prop('u_colormap'),
         u_projection: regl.prop('u_projection'),
         u_light_angle: [Math.cos(Math.PI/3), Math.sin(Math.PI/3)],
         u_inverse_texture_size: 1.0 / 2048,
@@ -774,6 +784,45 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     }
 }
 
+function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperature}) {
+    // TODO: make into a function of lattitude
+    const planetRadius = 1;
+    const wind_speed = 100;
+    let {numRegions} = mesh;
+
+    for (let r = 0; r < numRegions; r++) {
+        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+        let abs_lat_deg = Math.abs(lat_deg);
+
+        r_temperature[r] = (1-r_elevation[r]);
+    }
+    console.log(r_temperature);
+}
+
+function assignRegionHumidity(mesh, {r_xyz, r_elevation, /* out */ r_humidity}) {
+    
+}
+
+function assignRegionClouds(mesh, {r_xyz, r_elevation, /* out */ r_clouds}) {
+    
+}
+
+function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_temperature}) {
+    
+}
+
+function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_humidity}) {
+    
+}
+
+function reassignRegionClouds(mesh, {r_xyz, r_elevation, r_temp, r_humidity, /* out */ r_clouds}) {
+    
+}
+
+
+
 
 /**********************************************************************
  * Main
@@ -790,7 +839,6 @@ function generateMesh() {
     
     map.r_xyz = result.r_xyz;
     map.t_xyz = generateTriangleCenters(mesh, map);
-    map.r_wind = new Array(mesh.numRegions);
     map.r_elevation = new Float32Array(mesh.numRegions);
     map.t_elevation = new Float32Array(mesh.numTriangles);
     map.r_moisture = new Float32Array(mesh.numRegions);
@@ -799,7 +847,11 @@ function generateMesh() {
     map.order_t = new Int32Array(mesh.numTriangles);
     map.t_flow = new Float32Array(mesh.numTriangles);
     map.s_flow = new Float32Array(mesh.numSides);
-
+    map.r_wind = new Array(mesh.numRegions);
+    map.r_temperature = new Array(mesh.numRegions);
+    map.r_humidity = new Array(mesh.numRegions);
+    map.r_clouds = new Array(mesh.numRegions);
+    
     generateMap();
 }
 
@@ -827,6 +879,9 @@ function generateMap() {
     assignFlow(mesh, map);
 
     assignRegionWindVectors(mesh, map);
+    assignRegionTemperature(mesh, map);
+    assignRegionHumidity(mesh, map);
+    assignRegionClouds(mesh, map);
 
     quadGeometry.setMap(mesh, map);
     draw();
@@ -1063,10 +1118,20 @@ function _draw() {
         return [e, m];
     }
 
+    function r_color_fn_2(r) {
+        let h = map.r_humidity[r];
+        let t = map.r_temperature[r];
+        return [0, t];
+    }
+
+    // physical features
+
     if (drawMode === 'centroid') {
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
         renderTriangles({
             u_projection,
+            u_colormap,
+            u_radius: 1,
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
@@ -1082,6 +1147,21 @@ function _draw() {
 
     drawRivers(u_projection, mesh, map);
     
+    // gizmos
+
+    let show_temperature = true;
+    if (show_temperature) {
+        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_2);
+        renderTriangles({
+            u_projection,
+            u_colormap: u_colormap_temperature,
+            u_radius: 1.001,
+            a_xyz: triangleGeometry.xyz,
+            a_tm: triangleGeometry.tm,
+            count: triangleGeometry.xyz.length / 3,
+        });
+    }
+
     if (draw_plateVectors) {
         drawPlateVectors(u_projection, mesh, map);
     }
@@ -1089,7 +1169,7 @@ function _draw() {
         drawPlateBoundaries(u_projection, mesh, map);
     }
     
-    drawWindVectors(u_projection, mesh, map);
+    // drawWindVectors(u_projection, mesh, map);
     //drawNormalVectors(u_projection, mesh, map);
 
     drawAxis(u_projection);
