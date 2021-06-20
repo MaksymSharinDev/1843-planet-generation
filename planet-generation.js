@@ -188,6 +188,21 @@ void main() {
 
 
 const renderTriangles = regl({
+    blend: {
+        enable: true,
+        func: {
+            srcRGB: 'src alpha',
+            srcAlpha: 1,
+            dstRGB: 'one minus src alpha',
+            dstAlpha: 1
+        },
+        equation: {
+            rgb: 'add',
+            alpha: 'add'
+        },
+        color: [0, 0, 0, 0]
+    },
+
     frag: `
 precision mediump float;
 uniform sampler2D u_colormap;
