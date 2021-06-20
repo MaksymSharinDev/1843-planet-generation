@@ -84,6 +84,14 @@ window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); };
 window.setDrawTemperature = flag => { draw_temperature = flag; draw(); };
 window.setDrawHumidity = flag => { draw_humidity = flag; draw(); };
 window.setDrawClouds = flag => { draw_clouds = flag; draw(); };
+window.setRender = renderWhat => {
+    draw_temperature = draw_humidity = draw_clouds = false;
+    if (renderWhat === "temperature") draw_temperature = true;
+    else if (renderWhat === "humidity") draw_humidity = true;
+    else if (renderWhat === "clouds") draw_clouds = true;
+
+    draw();
+};
 
 
 const renderPoints = regl({
