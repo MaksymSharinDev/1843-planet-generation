@@ -58,6 +58,8 @@ let draw_plateBoundaries = false;
 let draw_equator = false;
 let draw_extraLat = true;
 let draw_primeMeridian = false;
+let draw_windVectors = false;
+let draw_normalVectors = false;
 
 let draw_temperature = false;
 let draw_humidity = false;
@@ -69,6 +71,7 @@ let SEED = 123;
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
 window.setSeed = newSeed => { SEED = newSeed; generateMap(); };
+window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
 window.setRotation = newRotation => { rotation = newRotation; draw(); };
 window.setTilt     = newTilt     => { tilt = newTilt; draw(); };
@@ -79,7 +82,9 @@ window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); }
 window.setDrawEquator = flag => { draw_equator = flag; draw(); };
 window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
 window.setDrawPrimeMeridian = flag => { draw_primeMeridian = flag; draw(); };
-window.setSeaLevel = newLevel => { SEA_LEVEL = newLevel; generateMap(); };
+window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
+window.setDrawWindVectors = flag => { draw_windVectors = flag; draw(); };
+window.setDrawNormalVectors = flag => { draw_normalVectors = flag; draw(); };
 
 window.setDrawTemperature = flag => { draw_temperature = flag; draw(); };
 window.setDrawHumidity = flag => { draw_humidity = flag; draw(); };
@@ -92,6 +97,7 @@ window.setRender = renderWhat => {
 
     draw();
 };
+window.advanceWeather = () => { advanceWeather(mesh, map); draw(); }
 
 
 const renderPoints = regl({
@@ -718,6 +724,28 @@ function getNextNeighbor(mesh, current_r, dir, {r_xyz}) {
     return bestNeighbor;
 }
 
+function getNeighbor(mesh, current_r, dir, {r_xyz}) {
+    let dist = magnitude(dir);
+    let current_xyz = r_xyz.slice(3 * current_r, 3 * current_r + 3);
+    let n_count = 0;
+
+    while (n_count++ < 20) {
+        if (dist <= 0) return current_r;
+
+        let next_r = getNextNeighbor(mesh, current_r, dir, {r_xyz});
+        let next_xyz = r_xyz.slice(3 * next_r, 3 * next_r + 3);
+        dist -= magnitude(vectorSubtract(next_xyz, current_xyz));
+
+        current_r = next_r;
+        current_xyz = next_xyz;
+    }
+
+    console.error("Vector was too long, or something else went wrong.");
+    console.log({dir, mag: magnitude(dir)});
+
+    return current_r;
+}
+
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const planetRadius = 1;
     const wind_speed = 100;
@@ -802,10 +830,11 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
         let oldSpeed = magnitude(r_wind[r]);
         let newSpeed = oldSpeed + 10*(Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL));
-        let speedChangeFactor = newSpeed / oldSpeed;
+        let speedChangeFactor = (newSpeed / oldSpeed) / 100;
 
         [wind_x, wind_y, wind_z] = r_wind[r];
         r_wind[r] = [speedChangeFactor*wind_x, speedChangeFactor*wind_y, speedChangeFactor*wind_z];
+        
     }
 }
 
@@ -823,8 +852,6 @@ function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperat
 }
 
 function assignRegionHumidity(mesh, {r_elevation, r_temperature, /* out */ r_humidity}) {
-    const planetRadius = 1;
-    const wind_speed = 100;
     let {numRegions} = mesh;
 
     for (let r = 0; r < numRegions; r++) {
@@ -832,12 +859,64 @@ function assignRegionHumidity(mesh, {r_elevation, r_temperature, /* out */ r_hum
     }
 }
 
-function assignRegionClouds(mesh, {r_xyz, r_elevation, /* out */ r_clouds}) {
-    
+function assignRegionClouds(mesh, {/* out */ r_clouds}) {
+    let {numRegions} = mesh;
+    for (let r = 0; r < numRegions; r++) {
+        r_clouds[r] = 0;
+    }
 }
 
 function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_temperature}) {
+    const planetRadius = 1;
+    let {numRegions} = mesh;
+    let r_newTemperature = new Array(numRegions);
+    let blownTemp = new Array(numRegions);
     
+
+    for (let r = 0; r < numRegions; r++) {
+        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+
+        // base temperature
+        r_newTemperature[r] = (1-r_elevation[r]) * lat_deg / 90;
+
+        // wind
+        let blownTo_r;
+        try {
+            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+        } catch (error) {
+            console.error(error);
+            blownTo_r = r;
+        }
+        
+        blownTemp[blownTo_r] = r_temperature[r];
+    }
+
+    // diffusion
+    for (let r = 0; r < numRegions; r++) {
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_temperature[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+
+        r_newTemperature[r] = (3/4) * r_newTemperature[r] + (1/4) * neighborAverage;
+    }
+
+    // account for wind
+    for(let r = 0; r < numRegions; r++) {
+        r_temperature[r] = (r_temperature[r] + blownTemp[r]) / 2;
+    }
+
+    // account for rain
+
+    // finalize
+    for (let r = 0; r < numRegions; r++) {
+        r_temperature[r] = r_newTemperature[r];
+    }
 }
 
 function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_humidity}) {
@@ -848,6 +927,12 @@ function reassignRegionClouds(mesh, {r_xyz, r_elevation, r_temp, r_humidity, /* 
     
 }
 
+function advanceWeather(mesh, map) {
+    //reassignRegionWind();
+    reassignRegionTemperature(mesh, map);
+    reassignRegionHumidity(mesh, map);
+    reassignRegionClouds(mesh, map);
+}
 
 
 
@@ -1091,7 +1176,7 @@ function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
         line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
         line_rgba.push([0.3, 0.3, 1, 1]);
         line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
-                               vec3.scale([], r_wind[r], 2 / Math.sqrt(N))));
+                               vec3.scale([], r_wind[r], 100 * 2 / Math.sqrt(N))));
         line_rgba.push([1, 1, 1, 1]);
     }
 
@@ -1210,9 +1295,12 @@ function _draw() {
     if (draw_plateBoundaries) {
         drawPlateBoundaries(u_projection, mesh, map);
     }
-    
-    // drawWindVectors(u_projection, mesh, map);
-    //drawNormalVectors(u_projection, mesh, map);
+    if (draw_windVectors) {
+        drawWindVectors(u_projection, mesh, map);
+    }
+    if (draw_normalVectors) {
+        drawNormalVectors(u_projection, mesh, map);    
+    }
 
     drawAxis(u_projection);
 
