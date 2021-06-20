@@ -51,7 +51,7 @@ window.setP = newP => { P = newP; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
 window.setRotation = newRotation => { rotation = newRotation; draw(); };
 window.setTilt     = newTilt     => { tilt = newTilt; draw(); };
-window.setProcession = newProcession => { procession = newProcession; draw(); console.log(procession); };
+window.setProcession = newProcession => { procession = newProcession; draw(); };
 window.setDrawMode = newMode => { drawMode = newMode; draw(); };
 window.setDrawPlateVectors = flag => { draw_plateVectors = flag; draw(); };
 window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); };
