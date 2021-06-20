@@ -103,5 +103,5 @@ function colormap_humidity() {
     return pixels;
 }
 
-exports.colormap_temperature = colormap_temperature();
+exports.colormap_humidity = colormap_humidity();
 

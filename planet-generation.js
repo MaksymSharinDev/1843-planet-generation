@@ -802,24 +802,26 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
 }
 
 function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperature}) {
-    // TODO: make into a function of lattitude
     const planetRadius = 1;
-    const wind_speed = 100;
     let {numRegions} = mesh;
 
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
-        let abs_lat_deg = Math.abs(lat_deg);
 
         r_temperature[r] = (1-r_elevation[r]) * lat_deg / 90;
     }
-    console.log(r_temperature);
 }
 
-function assignRegionHumidity(mesh, {r_xyz, r_elevation, /* out */ r_humidity}) {
-    
+function assignRegionHumidity(mesh, {r_elevation, r_temperature, /* out */ r_humidity}) {
+    const planetRadius = 1;
+    const wind_speed = 100;
+    let {numRegions} = mesh;
+
+    for (let r = 0; r < numRegions; r++) {
+        r_humidity[r] = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
+    }
 }
 
 function assignRegionClouds(mesh, {r_xyz, r_elevation, /* out */ r_clouds}) {
