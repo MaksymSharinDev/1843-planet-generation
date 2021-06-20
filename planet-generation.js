@@ -663,15 +663,15 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
 
         let wind_dir = [0, 0];
 
-        if (0 < abs_lat_deg < 30) {
+        if (0 < abs_lat_deg && abs_lat_deg < 30) {
             let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
             wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
         } else
-        if (30 < abs_lat_deg < 60) {
+        if (30 < abs_lat_deg && abs_lat_deg < 60) {
             let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
             wind_dir = [Math.cos(trigterm), -Math.sin(trigterm)];
         } else 
-        if (60 < abs_lat_deg < 90) {
+        if (60 < abs_lat_deg && abs_lat_deg < 90) {
             let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
             wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
         }
@@ -682,7 +682,6 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         }
 
         wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
-
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
