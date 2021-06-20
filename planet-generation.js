@@ -7,8 +7,6 @@
  */
 'use strict';
 
-const SEED = 123;
-
 const SimplexNoise = require('simplex-noise');
 const FlatQueue = require('flatqueue');
 const colormap = require('./colormap');
@@ -45,9 +43,11 @@ let draw_extraLat = true;
 let draw_primeMeridian = false;
 
 let SEA_LEVEL = 0.2;
+let SEED = 123;
 
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
+window.setSeed = newSeed => { SEED = newSeed; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
 window.setRotation = newRotation => { rotation = newRotation; draw(); };
 window.setTilt     = newTilt     => { tilt = newTilt; draw(); };
