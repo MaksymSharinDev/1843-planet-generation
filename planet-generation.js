@@ -27,6 +27,7 @@ const u_colormap = regl.texture({
     wrapT: 'clamp'
 });
 
+const WATER_LEVEL = 0;
 
 /* UI parameters */
 let N = 10000;
@@ -549,7 +550,7 @@ function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec,
 }
 
 function reigonIsWater(r_elevation, r) {
-    return r_elevation[r] < 0;
+    return r_elevation[r] < WATER_LEVEL;
 }
 
 
@@ -641,12 +642,52 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
  * Weaather
  */
 
+function vectorSubtract(a, b) {
+    let [ax, ay, az] = a,
+        [bx, by, bz] = b;
+    
+    return [ax - bx, ay - by, az - bz];
+}
+
+function dot (a, b) {
+    let [ax, ay, az] = a,
+        [bx, by, bz] = b;
+    
+    return ax*bx + ay*by + az*bz;
+}
+
+function magnitude(a) {
+    return Math.sqrt(dot(a, a));
+}
+
+function getNextNeighbor(mesh, current_r, dir, {r_xyz}) {
+    let bestAngle = Math.Infinity;
+    let bestNeighbor = -1;
+
+    let current_xyz = r_xyz.slice(3 * current_r, 3 * current_r + 3);
+
+    let r_out = [];
+    mesh.r_circulate_r(r_out, current_r);
+    for (let neighbor_r of r_out) {
+        let neighbor_xyz = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+        let neighbor_dir = vectorSubtract(neighbor_xyz, current_xyz);
+
+        let angleProportionate = dot(dir, neighbor_dir) / magnitude(neighbor_dir);
+
+        if (bestAngle === Math.Infinity || angleProportionate < bestAngle) {
+            bestAngle = angleProportionate;
+            bestNeighbor = neighbor_r;
+        }
+    }
+
+    return bestNeighbor;
+}
+
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
     const planetRadius = 1;
     const wind_speed = 100;
     let {numRegions} = mesh;
 
-    // prevailing winds
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
@@ -655,6 +696,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
 
         let wind_dir = [0, 0];
 
+        // prevailing winds
         if (0 < abs_lat_deg && abs_lat_deg < 30) {
             let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
             wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
@@ -668,19 +710,14 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
             wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
         }
 
-        // southern hemisphere
         if (z < 0) {
+            // southern hemisphere
             wind_dir[1] = -wind_dir[1];
         }
 
         wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
 
-        // wind_dir = [0, 100]
-
         // TODO: noisify
-
-        // TODO: slowdown according to elevation change
-
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
@@ -725,6 +762,15 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         //     crash;
         // }
 
+        
+        // slowdown/speedup according to elevation change
+        let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
+        let oldSpeed = magnitude(r_wind[r]);
+        let newSpeed = oldSpeed + 10*(Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL));
+        let speedChangeFactor = newSpeed / oldSpeed;
+
+        [wind_x, wind_y, wind_z] = r_wind[r];
+        r_wind[r] = [speedChangeFactor*wind_x, speedChangeFactor*wind_y, speedChangeFactor*wind_z];
     }
 }
 
