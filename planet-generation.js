@@ -43,6 +43,14 @@ const u_colormap_humidity = regl.texture({
     wrapT: 'clamp'
 });
 
+const u_colormap_cloudcover = regl.texture({
+    width: colormap.width,
+    height: colormap.height,
+    data: colormap.colormap_cloudcover,
+    wrapS: 'clamp',
+    wrapT: 'clamp'
+});
+
 const WATER_LEVEL = 0;
 
 /* UI parameters */
