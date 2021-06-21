@@ -899,6 +899,17 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         // }
 
         
+
+        // TODO: add a term for blowing more in the direction of warmer neighboring tiles
+        // something like
+        // let r_out = [];
+        // mesh.r_circulate_r(r_out, r);
+        // for (let neighbor_r of r_out) {
+        //     let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
+        //     wind_dir += 0.04 * temperatureDifference * lat_lon_dir_toNeighbor(r, neighbor_r);
+        // }
+        // TODO: call this function every timestep instead of reassignWind 
+        
         // slowdown/speedup according to elevation change
         let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
         let oldSpeed = magnitude(r_wind[r]);
