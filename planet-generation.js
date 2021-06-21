@@ -947,7 +947,7 @@ function assignRegionClouds(mesh, {/* out */ r_clouds}) {
     }
 }
 
-function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_temperature}) {
+function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /* in/out */ r_temperature}) {
     const planetRadius = 1;
     let {numRegions} = mesh;
     let r_newTemperature = new Array(numRegions);
@@ -960,7 +960,14 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out 
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
 
         // base temperature
-        r_newTemperature[r] = (1-r_elevation[r]) * lat_deg / 90;
+        let baseTemperature = (1-r_elevation[r]) * lat_deg / 90;
+        
+        // account for cloud cover
+        baseTemperature *= (1-Math.max(1, 2*r_clouds[r]));
+
+
+        // average with old temperature
+        r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
 
         // wind
         let blownTo_r;
@@ -986,17 +993,18 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out 
 
         r_newTemperature[r] = (3/4) * r_newTemperature[r] + (1/4) * neighborAverage;
     }
+    
+    // account for rain
+    for(let r = 0; r < numRegions; r++) {
+        // rain occurs above cloud value 0.5
+        r_newTemperature[r] -= Math.max(0, r_clouds[r]-0.5);
+    }
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
-        r_temperature[r] = (r_temperature[r] + blownTemp[r]) / 2;
-        r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
+        r_newTemperature[r] = (r_newTemperature[r] + blownTemp[r]) / 2;
+        r_newTemperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
     }
-    console.log(r_wind)
-
-    // account for cloudcover
-
-    // account for rain
 
     // finalize
     for (let r = 0; r < numRegions; r++) {
@@ -1004,8 +1012,64 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, /* in/out 
     }
 }
 
-function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, /* in/out */ r_humidity}) {
+function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_temperature, /* in/out */ r_humidity}) {
+    const planetRadius = 1;
+    let {numRegions} = mesh;
+    let r_newHumidity = new Array(numRegions);
+    let blownHumidity = new Array(numRegions);
     
+
+    for (let r = 0; r < numRegions; r++) {
+        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+
+        // base humidity
+        let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
+
+        // average with old temperature
+        r_newHumidity[r] = 0.5 * baseHumidity + 0.5 * r_humidity[r];
+
+        // wind
+        let blownTo_r;
+        try {
+            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+        } catch (error) {
+            console.error(error);
+            blownTo_r = r;
+        }
+        
+        blownHumidity[blownTo_r] = r_humidity[r];
+    }
+
+    // diffusion
+    for (let r = 0; r < numRegions; r++) {
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_humidity[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+
+        r_newHumidity[r] = (3/4) * r_newHumidity[r] + (1/4) * neighborAverage;
+    }
+
+    // account for rain
+    for(let r = 0; r < numRegions; r++) {
+        // rain occurs above cloud value 0.5
+        r_newHumidity[r] -= 2*Math.max(0, r_clouds[r]-0.5);
+    }
+
+    for(let r = 0; r < numRegions; r++) {
+        r_newHumidity[r] = (r_newHumidity[r] + blownHumidity[r]) / 2;
+        // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
+    }
+
+    // finalize
+    for (let r = 0; r < numRegions; r++) {
+        r_humidity[r] = r_newHumidity[r];
+    }
 }
 
 function reassignRegionClouds(mesh, {r_xyz, r_elevation, r_temp, r_humidity, /* out */ r_clouds}) {
