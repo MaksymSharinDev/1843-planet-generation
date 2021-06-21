@@ -951,20 +951,21 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
     const planetRadius = 1;
     let {numRegions} = mesh;
     let r_newTemperature = new Array(numRegions);
+    let r_baseTemperature = new Array(numRegions);
+    
     let blownTemp = new Array(numRegions);
     
-
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
             lon_deg = (180/Math.PI) * Math.atan2(y, x);
 
         // base temperature
-        let baseTemperature = (1-r_elevation[r]) * lat_deg / 90;
+        let baseTemperature = r_baseTemperature[r] = (1-r_elevation[r]) * lat_deg / 90;
         
         // account for cloud cover
+        if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
         baseTemperature *= (1-Math.max(1, 2*r_clouds[r]));
-
 
         // average with old temperature
         r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
@@ -990,6 +991,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
             neighborAverage += r_temperature[neighbor_r];
         }
         neighborAverage /= r_out.length;
+        if (r_out.length == 0)  console.error("no neighbors");
 
         r_newTemperature[r] = (3/4) * r_newTemperature[r] + (1/4) * neighborAverage;
     }
@@ -1002,13 +1004,15 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
+        if (isNaN(blownTemp[r])) blownTemp[r] = r_newTemperature[r]; // some tiles don't get wind blowing onto them
+
         r_newTemperature[r] = (r_newTemperature[r] + blownTemp[r]) / 2;
-        r_newTemperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
+        r_newTemperature[r] += 2*(magnitude(r_wind[r]) - 0.01);
     }
 
     // finalize
     for (let r = 0; r < numRegions; r++) {
-        r_temperature[r] = r_newTemperature[r];
+        r_temperature[r] = 0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r];
     }
 }
 
@@ -1028,7 +1032,7 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
 
         // average with old temperature
-        r_newHumidity[r] = 0.5 * baseHumidity + 0.5 * r_humidity[r];
+        r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
 
         // wind
         let blownTo_r;
@@ -1061,7 +1065,10 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         r_newHumidity[r] -= 2*Math.max(0, r_clouds[r]-0.5);
     }
 
+    // account for wind
     for(let r = 0; r < numRegions; r++) {
+        if (isNaN(blownHumidity[r])) blownHumidity[r] = r_newHumidity[r]; // some tiles don't get wind blowing onto them
+
         r_newHumidity[r] = (r_newHumidity[r] + blownHumidity[r]) / 2;
         // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
     }
@@ -1139,10 +1146,10 @@ function generateMap() {
     assignDownflow(mesh, map);
     assignFlow(mesh, map);
 
+    assignRegionClouds(mesh, map);
     assignRegionWindVectors(mesh, map);
     assignRegionTemperature(mesh, map);
     assignRegionHumidity(mesh, map);
-    assignRegionClouds(mesh, map);
 
     quadGeometry.setMap(mesh, map);
     draw();

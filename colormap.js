@@ -76,7 +76,6 @@ function colormap_temperature() {
             pixels[p++] = 255;
         }
     }
-    console.log(pixels);
     return pixels;
 }
 
@@ -99,7 +98,6 @@ function colormap_humidity() {
             pixels[p++] = 255;
         }
     }
-    console.log(pixels);
     return pixels;
 }
 
@@ -123,7 +121,6 @@ function colormap_cloudcover() {
             pixels[p++] = Math.min(255, 2.5*255*y/exports.height);
         }
     }
-    console.log(pixels);
     return pixels;
 }
 
