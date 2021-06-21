@@ -1004,7 +1004,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
-        if (isNaN(blownTemp[r])) blownTemp[r] = r_newTemperature[r]; // some tiles don't get wind blowing onto them
+        if (isNaN(blownTemp[r])) blownTemp[r] = r_temperature[r]; // some tiles don't get wind blowing onto them
 
         r_newTemperature[r] = (r_newTemperature[r] + blownTemp[r]) / 2;
         r_newTemperature[r] += 2*(magnitude(r_wind[r]) - 0.01);
@@ -1067,7 +1067,7 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
-        if (isNaN(blownHumidity[r])) blownHumidity[r] = r_newHumidity[r]; // some tiles don't get wind blowing onto them
+        if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
 
         r_newHumidity[r] = (r_newHumidity[r] + blownHumidity[r]) / 2;
         // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
@@ -1080,7 +1080,41 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
 }
 
 function reassignRegionClouds(mesh, {r_xyz, r_elevation, r_temp, r_humidity, /* out */ r_clouds}) {
+    // const planetRadius = 1;
+    // let {numRegions} = mesh;
+    // let r_newClouds = new Array(numRegions);
+    // let blownClouds = new Array(numRegions);
     
+
+    // for (let r = 0; r < numRegions; r++) {
+    //     // base humidity
+    //     let baseClouds = r_clouds[r];
+
+    //     // average with old temperature
+    //     r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
+
+    //     // wind
+    //     let blownTo_r;
+    //     try {
+    //         blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+    //     } catch (error) {
+    //         console.error(error);
+    //         blownTo_r = r;
+    //     }
+        
+    //     blownClouds[blownTo_r] = r_clouds[r];
+    // }
+
+    
+    // for (let r = 0; r < numRegions; r++) {
+    //     if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
+    //     r_newClouds[r] += blownClouds[r];
+    // }
+    
+    // // finalize
+    // for (let r = 0; r < numRegions; r++) {
+    //     r_clouds[r] = r_newClouds[r];
+    // }
 }
 
 function advanceWeather(mesh, map) {
