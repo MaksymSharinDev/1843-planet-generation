@@ -1096,6 +1096,9 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
     let r_newClouds = new Array(numRegions);
     let blownClouds = new Array(numRegions);
     
+    // TODO // TODO // TODO // TODO // TODO
+    // TODO: this function always results in all NaNs - that shouldn't happen
+    // TODO // TODO // TODO // TODO // TODO
 
     for (let r = 0; r < numRegions; r++) {
         // new clouds
