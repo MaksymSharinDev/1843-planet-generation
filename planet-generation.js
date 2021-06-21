@@ -1079,42 +1079,50 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
     }
 }
 
-function reassignRegionClouds(mesh, {r_xyz, r_elevation, r_temp, r_humidity, /* out */ r_clouds}) {
-    // const planetRadius = 1;
-    // let {numRegions} = mesh;
-    // let r_newClouds = new Array(numRegions);
-    // let blownClouds = new Array(numRegions);
+function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /* out */ r_clouds}) {
+    const planetRadius = 1;
+    let {numRegions} = mesh;
+    let r_newClouds = new Array(numRegions);
+    let blownClouds = new Array(numRegions);
     
 
-    // for (let r = 0; r < numRegions; r++) {
-    //     // base humidity
-    //     let baseClouds = r_clouds[r];
+    for (let r = 0; r < numRegions; r++) {
+        // new clouds
+        // note: this is not the method used by the reference; I wanted to have a continuous cloud system instead of a discrete one
+        r_newClouds[r] += (1-r_temperature[r]) * r_humidity[r];
 
-    //     // average with old temperature
-    //     r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
+        // keep existing clouds, but discount some dissapation rate
+        if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
+        r_newClouds[r] += 0.6*r_clouds[r];
 
-    //     // wind
-    //     let blownTo_r;
-    //     try {
-    //         blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
-    //     } catch (error) {
-    //         console.error(error);
-    //         blownTo_r = r;
-    //     }
+        // if it's raining, decrease the cloud level
+        // note: it's raining when clouds are above 0.5
+        r_newClouds[r] -= 0.25*Math.max(0, r_clouds[r] - 0.5);
+
+        // wind
+        let blownTo_r;
+        try {
+            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+        } catch (error) {
+            console.error(error);
+            blownTo_r = r;
+        }
         
-    //     blownClouds[blownTo_r] = r_clouds[r];
-    // }
+        blownClouds[blownTo_r] = r_clouds[r];
+    }
 
     
-    // for (let r = 0; r < numRegions; r++) {
-    //     if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
-    //     r_newClouds[r] += blownClouds[r];
-    // }
+    for (let r = 0; r < numRegions; r++) {
+        if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
+        r_newClouds[r] += blownClouds[r];
+    }
     
-    // // finalize
-    // for (let r = 0; r < numRegions; r++) {
-    //     r_clouds[r] = r_newClouds[r];
-    // }
+    // finalize
+    for (let r = 0; r < numRegions; r++) {
+        r_clouds[r] = r_newClouds[r];
+    }
+
+    statsAnalysis(r_clouds)
 }
 
 function advanceWeather(mesh, map) {
@@ -1430,6 +1438,10 @@ function _draw() {
         let t = map.r_temperature[r];
         return [0, h];
     }
+    function r_color_fn_4(r) {
+        let h = map.r_clouds[r];
+        return [0, h];
+    }
 
     // physical features
 
@@ -1472,6 +1484,17 @@ function _draw() {
         renderTriangles({
             u_projection,
             u_colormap: u_colormap_humidity,
+            u_radius: 1.001,
+            a_xyz: triangleGeometry.xyz,
+            a_tm: triangleGeometry.tm,
+            count: triangleGeometry.xyz.length / 3,
+        });
+    }
+    if (draw_clouds) {
+        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_4);
+        renderTriangles({
+            u_projection,
+            u_colormap: u_colormap_cloudcover,
             u_radius: 1.001,
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
