@@ -826,20 +826,31 @@ function statsAnalysis(data) {
     console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
 }
 
+function xyzToLatLon(xyz, planetRadius = 1) {
+    let [x, y, z] = xyz;
+    let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+        lon_deg = (180/Math.PI) * Math.atan2(y, x);
+    let abs_lat_deg = Math.abs(lat_deg);
+
+    return {lat_deg, lon_deg, abs_lat_deg};
+}
+
 // note: the distance between neighboring tiles follows this distribution:
 // { min: 0.00008017334191617021, max: 0.08736101006422599, average: 0.04041248913501134, stddev: 0.013437966505337578 }
 // currrently, wind speeds follow this:
 // { min: 0, max: 0.09183723630842007, average: 0.01448420366929869, stddev: 0.00795346069581971 }
-function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
+function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* out */ r_wind}) {
     const planetRadius = 1;
     const wind_speed = 100;
     let {numRegions} = mesh;
 
     for (let r = 0; r < numRegions; r++) {
+        // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+        //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
+        // let abs_lat_deg = Math.abs(lat_deg);
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-            lon_deg = (180/Math.PI) * Math.atan2(y, x);
-        let abs_lat_deg = Math.abs(lat_deg);
+        let {lat_deg, lon_deg, abs_lat_deg} = xyzToLatLon([x, y, z]);
 
         let wind_dir = [0, 0];
 
@@ -865,6 +876,30 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
 
         // TODO: noisify
+
+        // Wind blows from cold to warm
+        // TODO: this causes NaN temperatures and NaN wind
+        // if (!isNaN(r_temperature[r])) {
+        //     let r_out = [];
+        //     mesh.r_circulate_r(r_out, r);
+        //     for (let neighbor_r of r_out) {
+        //         if (isNaN(r_temperature[neighbor_r])) continue;
+        //         let [nx, ny, nz] = r_xyz.slice(3 * r, 3 * r + 3);
+        //         let {n_lat_deg, n_lon_deg, n_abs_lat_deg} = xyzToLatLon([x, y, z]);
+
+                
+        //         let d_lat = n_lat_deg - lat_deg,
+        //             d_lon = n_lon_deg - lon_deg;
+        //         let mag = magnitude([d_lat, d_lon, 0]);
+        //         if (mag === 0) continue;
+
+        //         let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
+        //         let speed = 0.001 * temperatureDifference;
+        //         let speedFactor = speed / mag;
+
+        //         wind_dir += [d_lat * speedFactor, d_lon * speedFactor];
+        //     }
+        // }
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
@@ -910,17 +945,6 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         // }
 
         
-
-        // TODO: add a term for blowing more in the direction of warmer neighboring tiles
-        // something like
-        // let r_out = [];
-        // mesh.r_circulate_r(r_out, r);
-        // for (let neighbor_r of r_out) {
-        //     let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-        //     wind_dir += 0.04 * temperatureDifference * lat_lon_dir_toNeighbor(r, neighbor_r);
-        // }
-        // TODO: call this function every timestep instead of reassignWind 
-        
         // slowdown/speedup according to elevation change
         let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
         let oldSpeed = magnitude(r_wind[r]);
@@ -938,7 +962,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, /* out */ r_wind}) {
         }
     }
 
-    statsAnalysis_vectorMagnitude(r_wind, numRegions);
+    // statsAnalysis_vectorMagnitude(r_wind, numRegions);
 }
 
 function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperature}) {
@@ -1105,12 +1129,9 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
     const planetRadius = 1;
     let {numRegions} = mesh;
     let r_newClouds = new Array(numRegions);
+    r_newClouds.fill(0);
     let blownClouds = new Array(numRegions);
     
-    // TODO // TODO // TODO // TODO // TODO
-    // TODO: this function always results in all NaNs - that shouldn't happen
-    // TODO // TODO // TODO // TODO // TODO
-
     for (let r = 0; r < numRegions; r++) {
         // new clouds
         // note: this is not the method used by the reference; I wanted to have a continuous cloud system instead of a discrete one
@@ -1122,7 +1143,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
 
         // if it's raining, decrease the cloud level
         // note: it's raining when clouds are above 0.5
-        r_newClouds[r] -= 0.25*Math.max(0, r_clouds[r] - 0.5);
+        r_newClouds[r] -= 0.8*Math.max(0, r_clouds[r] - 0.5);
 
         // wind
         let blownTo_r;
@@ -1135,23 +1156,36 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
         
         blownClouds[blownTo_r] = r_clouds[r];
     }
-
     
     for (let r = 0; r < numRegions; r++) {
         if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
         r_newClouds[r] += blownClouds[r];
     }
-    
-    // finalize
-    for (let r = 0; r < numRegions; r++) {
-        r_clouds[r] = r_newClouds[r];
-    }
 
-    statsAnalysis(r_clouds)
+    
+    // diffusion and finalize
+    for (let r = 0; r < numRegions; r++) {
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_newClouds[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+
+        r_clouds[r] = (1/4) * r_newClouds[r] + (3/4) * neighborAverage;
+    }
+    
+    // // finalize
+    // for (let r = 0; r < numRegions; r++) {
+    //     r_clouds[r] = r_newClouds[r];
+    // }
+
+    // statsAnalysis(r_clouds)
 }
 
 function advanceWeather(mesh, map) {
-    //reassignRegionWind();
+    assignRegionWindVectors(mesh, map);
     reassignRegionTemperature(mesh, map);
     reassignRegionHumidity(mesh, map);
     reassignRegionClouds(mesh, map);
