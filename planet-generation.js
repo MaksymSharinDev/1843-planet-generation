@@ -812,7 +812,18 @@ function statsAnalysis(data) {
     }
     stddev = Math.sqrt(stddev / distances.length);
 
-    console.log({min, max, average, stddev});
+    const binCount = 50;
+    const stepsize = (max-min) / binCount;
+    let bins = new Array(binCount);
+    bins.fill(0);
+    for (let i = 0; i < distances.length; i++) {
+        let d = distances[i];
+        d -= min;
+        let bin = Math.floor(d / stepsize);
+        bins[bin]++;
+    }
+
+    console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
 }
 
 // note: the distance between neighboring tiles follows this distribution:
