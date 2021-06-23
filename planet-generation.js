@@ -71,7 +71,7 @@ let draw_normalVectors = false;
 
 let draw_temperature = false;
 let draw_humidity = false;
-let draw_clouds = false;
+let draw_clouds = true;
 
 let SEA_LEVEL = 0.2;
 let SEED = 123;
@@ -101,7 +101,8 @@ window.setRender = renderWhat => {
     draw_temperature = draw_humidity = draw_clouds = false;
     if (renderWhat === "temperature") draw_temperature = true;
     else if (renderWhat === "humidity") draw_humidity = true;
-    else if (renderWhat === "clouds") draw_clouds = true;
+    else if (renderWhat === "surfaceonly") draw_clouds = false;
+    else if (renderWhat === "normal") draw_clouds = true;
 
     draw();
 };
@@ -792,7 +793,7 @@ function statsAnalysis_neighborsDistance(mesh, {r_xyz}) {
     }
     statsAnalysis(data);
 }
-function statsAnalysis(data) {
+function statsAnalysis(data, do_histogram=false) {
     let distances = data;
 
     let average = 0;
@@ -812,15 +813,18 @@ function statsAnalysis(data) {
     }
     stddev = Math.sqrt(stddev / distances.length);
 
-    const binCount = 50;
-    const stepsize = (max-min) / binCount;
-    let bins = new Array(binCount);
-    bins.fill(0);
-    for (let i = 0; i < distances.length; i++) {
-        let d = distances[i];
-        d -= min;
-        let bin = Math.floor(d / stepsize);
-        bins[bin]++;
+    let bins, stepsize;
+    if(do_histogram) {
+        const binCount = 50;
+        stepsize = (max-min) / binCount;
+        bins = new Array(binCount);
+        bins.fill(0);
+        for (let i = 0; i < distances.length; i++) {
+            let d = distances[i];
+            d -= min;
+            let bin = Math.floor(d / stepsize);
+            bins[bin]++;
+        }
     }
 
     console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
@@ -1058,7 +1062,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
 
     // finalize
     for (let r = 0; r < numRegions; r++) {
-        r_temperature[r] = 0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r];
+        r_temperature[r] = 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]);
     }
 }
 
@@ -1121,7 +1125,7 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
 
     // finalize
     for (let r = 0; r < numRegions; r++) {
-        r_humidity[r] = r_newHumidity[r];
+        r_humidity[r] = 0.5*Math.max(0, r_newHumidity[r]);
     }
 }
 
@@ -1132,18 +1136,22 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
     r_newClouds.fill(0);
     let blownClouds = new Array(numRegions);
     
+    let cloudChallenge = 3;
+    let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge);
+
     for (let r = 0; r < numRegions; r++) {
         // new clouds
         // note: this is not the method used by the reference; I wanted to have a continuous cloud system instead of a discrete one
-        r_newClouds[r] += (1-r_temperature[r]) * r_humidity[r];
+        //r_newClouds[r] += (1-r_temperature[r]) * r_humidity[r];
+        r_newClouds[r] = cloudFactorCalc(1-r_temperature[r]) * cloudFactorCalc(r_humidity[r]);
 
         // keep existing clouds, but discount some dissapation rate
         if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
-        r_newClouds[r] += 0.6*r_clouds[r];
+        r_newClouds[r] += 0.2*r_clouds[r];
 
         // if it's raining, decrease the cloud level
         // note: it's raining when clouds are above 0.5
-        r_newClouds[r] -= 0.8*Math.max(0, r_clouds[r] - 0.5);
+        r_newClouds[r] -= 2*Math.max(0, r_clouds[r] - 0.5);
 
         // wind
         let blownTo_r;
@@ -1174,6 +1182,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
         neighborAverage /= r_out.length;
 
         r_clouds[r] = (1/4) * r_newClouds[r] + (3/4) * neighborAverage;
+        r_clouds[r] = Math.min(1, Math.max(0, r_clouds[r]));
     }
     
     // // finalize
@@ -1189,6 +1198,11 @@ function advanceWeather(mesh, map) {
     reassignRegionTemperature(mesh, map);
     reassignRegionHumidity(mesh, map);
     reassignRegionClouds(mesh, map);
+
+    console.log("Stats for temperature, humidity, and clouds");
+    statsAnalysis(map.r_temperature);
+    statsAnalysis(map.r_humidity);
+    statsAnalysis(map.r_clouds);
 }
 
 
