@@ -982,32 +982,32 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
 
         // Wind blows from cold to warm
         // TODO: this causes NaN temperatures and NaN wind
-        // if (!isNaN(r_temperature[r])) {
-        //     let r_out = [];
-        //     mesh.r_circulate_r(r_out, r);
-        //     for (let neighbor_r of r_out) {
-        //         if (isNaN(r_temperature[neighbor_r])) continue;
-        //         let [nx, ny, nz] = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
-        //         let [n_lat_deg, n_lon_deg, n_abs_lat_deg] = xyzToLatLon([nx, ny, nz]);
+        if (!isNaN(r_temperature[r])) {
+            let r_out = [];
+            mesh.r_circulate_r(r_out, r);
+            for (let neighbor_r of r_out) {
+                if (isNaN(r_temperature[neighbor_r])) continue;
+                let [nx, ny, nz] = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+                let [n_lat_deg, n_lon_deg, n_abs_lat_deg] = xyzToLatLon([nx, ny, nz]);
 
                 
-        //         let d_lat = n_lat_deg - lat_deg,
-        //             d_lon = n_lon_deg - lon_deg;
-        //         let mag = magnitude([d_lat, d_lon, 0]);
-        //         if (mag === 0) continue;
+                let d_lat = n_lat_deg - lat_deg,
+                    d_lon = n_lon_deg - lon_deg;
+                let mag = magnitude([d_lat, d_lon, 0]);
+                if (mag === 0) continue;
 
-        //         let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-        //         let speed = 0.01 * temperatureDifference;
-        //         let speedFactor = speed / mag;
+                let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
+                let speed = 0.01 * temperatureDifference;
+                let speedFactor = speed / mag;
 
-        //         if (isNaN(d_lat*speedFactor*d_lon)) {
-        //             console.log({n_lat_deg, n_lon_deg, lat_deg, lon_deg, d_lat, speedFactor, d_lon, temperatureDifference, neighbor_r, r})
-        //             crash
-        //         }
+                if (isNaN(d_lat*speedFactor*d_lon)) {
+                    console.log({n_lat_deg, n_lon_deg, lat_deg, lon_deg, d_lat, speedFactor, d_lon, temperatureDifference, neighbor_r, r})
+                    crash
+                }
 
-        //         wind_dir += [d_lat * speedFactor, d_lon * speedFactor];
-        //     }
-        // }
+                wind_dir += [d_lat * speedFactor, d_lon * speedFactor];
+            }
+        }
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
@@ -1618,7 +1618,7 @@ let _draw_pending = false;
 function _draw() {
     let u_pointsize = 0.1 + 100 / Math.sqrt(N);
     let u_projection = mat4.create();
-    mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
+    // mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
     
     mat4.rotate(u_projection, u_projection, -procession, [1, 0, 0]);
     mat4.rotate(u_projection, u_projection, -tilt, [0, 1, 0]);
