@@ -125,3 +125,32 @@ function colormap_cloudcover() {
 }
 
 exports.colormap_cloudcover = colormap_cloudcover();
+
+function colormap_temperature_and_humidity() {
+    const pixels = new Uint8Array(exports.width * exports.height * 4);
+
+    for (var y = 0, p = 0; y < exports.height; y++) {
+        for (let x = 0; x < exports.width; x++) {
+            let r, g, b, a;
+
+            let t_prop = x/exports.width;
+            let h_prop = y/exports.width;
+            
+            r = 255 * (1-h_prop);
+            g = 255 * (1-h_prop);
+            b = 255;
+
+            r *= t_prop;
+            g *= t_prop;
+            b *= t_prop;
+
+            pixels[p++] = r;
+            pixels[p++] = g;
+            pixels[p++] = b;
+            pixels[p++] = 255;
+        }
+    }
+    return pixels;
+}
+
+exports.colormap_temperature_and_humidity = colormap_temperature_and_humidity();

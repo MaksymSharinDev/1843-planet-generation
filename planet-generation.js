@@ -51,6 +51,14 @@ const u_colormap_cloudcover = regl.texture({
     wrapT: 'clamp'
 });
 
+const u_colormap_temperature_and_humidity = regl.texture({
+    width: colormap.width,
+    height: colormap.height,
+    data: colormap.colormap_temperature_and_humidity,
+    wrapS: 'clamp',
+    wrapT: 'clamp'
+});
+
 const WATER_LEVEL = 0;
 
 /* UI parameters */
@@ -72,6 +80,7 @@ let draw_normalVectors = false;
 let draw_temperature = false;
 let draw_humidity = false;
 let draw_clouds = true;
+let draw_temperature_and_humidity = false;
 
 let SEA_LEVEL = 0.2;
 let SEED = 123;
@@ -98,11 +107,12 @@ window.setDrawTemperature = flag => { draw_temperature = flag; draw(); };
 window.setDrawHumidity = flag => { draw_humidity = flag; draw(); };
 window.setDrawClouds = flag => { draw_clouds = flag; draw(); };
 window.setRender = renderWhat => {
-    draw_temperature = draw_humidity = draw_clouds = false;
+    draw_temperature = draw_humidity = draw_clouds = draw_temperature_and_humidity = false;
     if (renderWhat === "temperature") draw_temperature = true;
     else if (renderWhat === "humidity") draw_humidity = true;
     else if (renderWhat === "surfaceonly") draw_clouds = false;
     else if (renderWhat === "normal") draw_clouds = true;
+    else if (renderWhat === "temperature_and_humidity") draw_temperature_and_humidity = true;
 
     draw();
 };
@@ -219,6 +229,57 @@ varying vec2 v_tm;
 void main() {
    float e = v_tm.x > 0.0? 0.5 * (v_tm.x * v_tm.x + 1.0) : 0.5 * (v_tm.x + 1.0);
    gl_FragColor = texture2D(u_colormap, vec2(e, v_tm.y));
+}
+`,
+
+    vert: `
+precision mediump float;
+uniform mat4 u_projection;
+uniform float u_radius;
+attribute vec3 a_xyz;
+attribute vec2 a_tm;
+varying vec2 v_tm;
+void main() {
+  v_tm = a_tm;
+  gl_Position = u_projection * vec4(u_radius * a_xyz, 1);
+}
+`,
+
+    uniforms: {
+        u_colormap: regl.prop('u_colormap'),
+        u_projection: regl.prop('u_projection'),
+        u_radius: regl.prop('u_radius'),
+    },
+
+    count: regl.prop('count'),
+    attributes: {
+        a_xyz: regl.prop('a_xyz'),
+        a_tm: regl.prop('a_tm'),
+    },
+});
+
+const renderTriangles_linear = regl({
+    blend: {
+        enable: true,
+        func: {
+            srcRGB: 'src alpha',
+            srcAlpha: 1,
+            dstRGB: 'one minus src alpha',
+            dstAlpha: 1
+        },
+        equation: {
+            rgb: 'add',
+            alpha: 'add'
+        },
+        color: [0, 0, 0, 0]
+    },
+
+    frag: `
+precision mediump float;
+uniform sampler2D u_colormap;
+varying vec2 v_tm;
+void main() {
+   gl_FragColor = texture2D(u_colormap, vec2(v_tm.x, v_tm.y));
 }
 `,
 
@@ -839,6 +900,10 @@ function xyzToLatLon(xyz, planetRadius = 1) {
     return {lat_deg, lon_deg, abs_lat_deg};
 }
 
+function sigmoid(x) {
+    return 1 / (1 + Math.exp(-x));
+}
+
 // note: the distance between neighboring tiles follows this distribution:
 // { min: 0.00008017334191617021, max: 0.08736101006422599, average: 0.04041248913501134, stddev: 0.013437966505337578 }
 // currrently, wind speeds follow this:
@@ -1138,8 +1203,8 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
     r_newClouds.fill(0);
     let blownClouds = new Array(numRegions);
     
-    let cloudChallenge = 3;
-    let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge);
+    let cloudChallenge = 7;
+    let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge) / 2;
 
     for (let r = 0; r < numRegions; r++) {
         // new clouds
@@ -1149,7 +1214,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
 
         // keep existing clouds, but discount some dissapation rate
         if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
-        r_newClouds[r] += 0.2*r_clouds[r];
+        r_newClouds[r] += 0.8*r_clouds[r];
 
         // if it's raining, decrease the cloud level
         // note: it's raining when clouds are above 0.5
@@ -1517,6 +1582,9 @@ function _draw() {
         let h = map.r_clouds[r];
         return [0, h];
     }
+    function r_color_fn_5(r) {
+        return [map.r_temperature[r], map.r_humidity[r]];
+    }
 
     // physical features
 
@@ -1570,6 +1638,17 @@ function _draw() {
         renderTriangles({
             u_projection,
             u_colormap: u_colormap_cloudcover,
+            u_radius: 1.001,
+            a_xyz: triangleGeometry.xyz,
+            a_tm: triangleGeometry.tm,
+            count: triangleGeometry.xyz.length / 3,
+        });
+    }
+    if (draw_temperature_and_humidity) {
+        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_5);
+        renderTriangles_linear({
+            u_projection,
+            u_colormap: u_colormap_temperature_and_humidity,
             u_radius: 1.001,
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
