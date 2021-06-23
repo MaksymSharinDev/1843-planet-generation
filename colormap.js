@@ -136,13 +136,9 @@ function colormap_temperature_and_humidity() {
             let t_prop = x/exports.width;
             let h_prop = y/exports.width;
             
-            r = 255 * (1-h_prop);
-            g = 255 * (1-h_prop);
-            b = 255;
-
-            r *= t_prop;
-            g *= t_prop;
-            b *= t_prop;
+            r = 255 * (t_prop);
+            g = 0;
+            b = 255 * (h_prop);
 
             pixels[p++] = r;
             pixels[p++] = g;

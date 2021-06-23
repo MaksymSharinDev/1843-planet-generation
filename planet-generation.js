@@ -18,6 +18,12 @@ const regl = require('regl')({
     canvas: "#output",
     extensions: ['OES_element_index_uint', 'OES_standard_derivatives']
 });
+const textureKey = document.getElementById("textureKey").getContext('2d');
+const draw_textureKey = ({texture}) => {
+    var imgData = textureKey.createImageData(colormap.width, colormap.height);
+    for (let i = 0; i < imgData.data.length; i++) { imgData.data[i] = texture[i]; }
+    textureKey.putImageData(imgData, 0, 0, 0, 0, colormap.width, colormap.height);
+}
 
 const u_colormap = regl.texture({
     width: colormap.width,
@@ -117,7 +123,6 @@ window.setRender = renderWhat => {
     draw();
 };
 window.advanceWeather = () => { advanceWeather(mesh, map); draw(); }
-
 
 const renderPoints = regl({
     frag: `
@@ -1598,12 +1603,18 @@ function _draw() {
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
         });
+        draw_textureKey({
+            texture: colormap.colormap_standard
+        });
     } else if (drawMode === 'quads') {
         renderIndexedTriangles({
             u_projection,
             a_xyz: quadGeometry.xyz,
             a_tm: quadGeometry.tm,
             elements: quadGeometry.I,
+        });
+        draw_textureKey({
+            texture: colormap.colormap_standard
         });
     }
 
@@ -1621,6 +1632,9 @@ function _draw() {
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
         });
+        draw_textureKey({
+            texture: colormap.colormap_temperature
+        });
     }
     if (draw_humidity) {
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_3);
@@ -1631,6 +1645,9 @@ function _draw() {
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
+        });
+        draw_textureKey({
+            texture: colormap.colormap_humidity
         });
     }
     if (draw_clouds) {
@@ -1643,6 +1660,9 @@ function _draw() {
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
         });
+        draw_textureKey({
+            texture: colormap.colormap_humidity
+        });
     }
     if (draw_temperature_and_humidity) {
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_5);
@@ -1653,6 +1673,9 @@ function _draw() {
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
+        });
+        draw_textureKey({
+            texture: colormap.colormap_temperature_and_humidity
         });
     }
 
