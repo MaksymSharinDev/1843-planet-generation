@@ -938,10 +938,10 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     let temp_temp_winddirs_0 = [];
     let temp_temp_winddirs_1 = [];
 
-    let wind_speed = 0.02;
     
 
     for (let r = 0; r < numRegions; r++) {
+        let wind_speed = 0.02;
         // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
         //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
@@ -949,7 +949,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let [lat_deg, lon_deg, abs_lat_deg] = xyzToLatLon([x, y, z]);
         if (z < 0) z = -z;
-        
+
         let wind_dir = [0, 0];
 
         // prevailing winds
@@ -972,9 +972,13 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         }
 
         // slowdown/speedup according to elevation change
-        // let blowsPast_r = getNextNeighbor(mesh, r, xyzFromLatLon(wind_dir), map);
-        // let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
-        // wind_speed *= 0.02*sigmoid(elevation_change);
+        let blowsPast_r = getNextNeighbor(mesh, r, xyzFromLatLon(wind_dir), map);
+        let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
+        wind_speed += 0.1*elevation_change;//*= 2*(sigmoid(elevation_change)-0.5); //*= (sigmoid(elevation_change)+0.5);
+        if(isNaN(wind_speed)) {
+            console.log(sigmoid(elevation_change)+0.5);
+            crash
+        }
 
         // Wind blows from cold to warm
         // TODO: this causes NaN temperatures and NaN wind
@@ -1024,7 +1028,9 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             wind_y = wind_blowsTo_y - y,
             wind_z = wind_blowsTo_z - z;
         
-        let speedFactor = wind_speed / magnitude([wind_x, wind_y, wind_z]);
+        let mag = magnitude([wind_x, wind_y, wind_z]);
+        mag = mag === 0 ? 1 : mag;
+        let speedFactor = wind_speed / mag;
         r_wind[r] = [speedFactor*wind_x, speedFactor*wind_y, speedFactor*wind_z];
 
         // if (z > 0) r_wind[r] = [x,y,z];
