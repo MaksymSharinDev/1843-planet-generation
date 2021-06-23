@@ -1067,6 +1067,18 @@ function assignRegionClouds(mesh, {/* out */ r_clouds}) {
     }
 }
 
+function average(list) {
+    return sum(list) / list.length;
+}
+
+function sum(list) {
+    let retval = 0;
+    for (let i = 0; i < list.length; i++) {
+        retval += list[i];
+    }
+    return retval;
+}
+
 function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /* in/out */ r_temperature}) {
     const planetRadius = 1;
     let {numRegions} = mesh;
@@ -1098,8 +1110,9 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
             console.error(error);
             blownTo_r = r;
         }
-        
-        blownTemp[blownTo_r] = r_temperature[r];
+
+        if (!blownTemp[blownTo_r]) blownTemp[blownTo_r] = [];
+        blownTemp[blownTo_r].push(r_newTemperature[r]); 
     }
 
     // diffusion
@@ -1124,9 +1137,10 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
-        if (isNaN(blownTemp[r])) blownTemp[r] = r_temperature[r]; // some tiles don't get wind blowing onto them
+        let tempBlown = average(blownTemp[r] ? blownTemp[r] : [r_newTemperature[r]]);
+        //if (isNaN(blownTemp[r])) blownTemp[r] = r_temperature[r]; // some tiles don't get wind blowing onto them
 
-        r_newTemperature[r] = (r_newTemperature[r] + blownTemp[r]) / 2;
+        r_newTemperature[r] = (r_newTemperature[r] + tempBlown) / 2;
         r_newTemperature[r] += 2*(magnitude(r_wind[r]) - 0.01);
     }
 
@@ -1142,12 +1156,13 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
     let {numRegions} = mesh;
     let r_newHumidity = new Array(numRegions);
     let blownHumidity = new Array(numRegions);
+    blownHumidity.fill([]);
     
 
     for (let r = 0; r < numRegions; r++) {
-        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+        // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+        // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+        //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
 
         // base humidity
         let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
@@ -1164,7 +1179,8 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
             blownTo_r = r;
         }
         
-        blownHumidity[blownTo_r] = r_humidity[r];
+        if (!blownHumidity[blownTo_r]) blownHumidity[blownTo_r] = [];
+        blownHumidity[blownTo_r].push(r_newHumidity[r]); 
     }
 
     // diffusion
@@ -1188,9 +1204,10 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
 
     // account for wind
     for(let r = 0; r < numRegions; r++) {
-        if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
+        let humidityBlown = average(blownHumidity[r] ? blownHumidity[r] : [r_newHumidity[r]]);
+        // if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
 
-        r_newHumidity[r] = (r_newHumidity[r] + blownHumidity[r]) / 2;
+        r_newHumidity[r] = (r_newHumidity[r] + humidityBlown) / 2;
         // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
     }
 
@@ -1208,7 +1225,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
     r_newClouds.fill(0);
     let blownClouds = new Array(numRegions);
     
-    let cloudChallenge = 7;
+    let cloudChallenge = 2;
     let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge) / 2;
 
     for (let r = 0; r < numRegions; r++) {
@@ -1234,12 +1251,24 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
             blownTo_r = r;
         }
         
-        blownClouds[blownTo_r] = r_clouds[r];
+        let windspeed = magnitude(r_wind[r]);
+        let cloudsBlown = Math.max(0, Math.min(1, windspeed / 0.04)) * r_newClouds[r];
+        let cloudsKept = (1-Math.max(0, Math.min(1, windspeed / 0.04))) * r_newClouds[r];
+        r_newClouds[r] = cloudsKept;
+        
+        if (isNaN(r_newClouds[r])) {
+            console.log({cloudsBlown, cloudsKept, windspeed})
+            crash
+        }
+
+        if (!blownClouds[blownTo_r]) blownClouds[blownTo_r] = [];
+        blownClouds[blownTo_r].push(cloudsBlown); 
     }
     
     for (let r = 0; r < numRegions; r++) {
-        if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
-        r_newClouds[r] += blownClouds[r];
+        let cloudsBlown = sum(blownClouds[r] ? blownClouds[r] : [r_newClouds[r]]);
+        // if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
+        r_newClouds[r] += cloudsBlown;
     }
 
     
