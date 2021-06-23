@@ -124,6 +124,17 @@ window.setRender = renderWhat => {
 };
 window.advanceWeather = () => { advanceWeather(mesh, map); draw(); }
 
+let advanceWeatherIntervalId;
+window.startWeather = () => {
+    advanceWeatherIntervalId = window.setInterval(() => {
+        advanceWeather(mesh, map); 
+        draw();
+    }, 10);
+};
+window.pauseWeather = () => {
+    clearInterval(advanceWeatherIntervalId); 
+};
+
 const renderPoints = regl({
     frag: `
 precision mediump float;
@@ -1300,10 +1311,10 @@ function advanceWeather(mesh, map) {
     reassignRegionHumidity(mesh, map);
     reassignRegionClouds(mesh, map);
 
-    console.log("Stats for temperature, humidity, and clouds");
-    statsAnalysis(map.r_temperature);
-    statsAnalysis(map.r_humidity);
-    statsAnalysis(map.r_clouds);
+    // console.log("Stats for temperature, humidity, and clouds");
+    // statsAnalysis(map.r_temperature);
+    // statsAnalysis(map.r_humidity);
+    // statsAnalysis(map.r_clouds);
 }
 
 
