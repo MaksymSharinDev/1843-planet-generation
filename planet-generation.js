@@ -80,7 +80,7 @@ let draw_plateBoundaries = false;
 let draw_equator = false;
 let draw_extraLat = true;
 let draw_primeMeridian = false;
-let draw_windVectors = false;
+let draw_windVectors = true;//false;
 let draw_normalVectors = false;
 
 let draw_temperature = false;
@@ -913,7 +913,14 @@ function xyzToLatLon(xyz, planetRadius = 1) {
         lon_deg = (180/Math.PI) * Math.atan2(y, x);
     let abs_lat_deg = Math.abs(lat_deg);
 
-    return {lat_deg, lon_deg, abs_lat_deg};
+    return [lat_deg, lon_deg, abs_lat_deg];
+}
+
+function xyzFromLatLon([lat, lon], planetRadius = 1) {
+    let x = planetRadius * Math.cos(lon) * Math.sin(lat),
+        y = planetRadius * Math.sin(lon) * Math.sin(lat),
+        z = planetRadius * Math.cos(lat);
+    return [x, y, z];
 }
 
 function sigmoid(x) {
@@ -926,8 +933,13 @@ function sigmoid(x) {
 // { min: 0, max: 0.09183723630842007, average: 0.01448420366929869, stddev: 0.00795346069581971 }
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* out */ r_wind}) {
     const planetRadius = 1;
-    const wind_speed = 100;
     let {numRegions} = mesh;
+
+    let temp_temp_winddirs_0 = [];
+    let temp_temp_winddirs_1 = [];
+
+    let wind_speed = 0.02;
+    
 
     for (let r = 0; r < numRegions; r++) {
         // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
@@ -935,8 +947,9 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
         // let abs_lat_deg = Math.abs(lat_deg);
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let {lat_deg, lon_deg, abs_lat_deg} = xyzToLatLon([x, y, z]);
-
+        let [lat_deg, lon_deg, abs_lat_deg] = xyzToLatLon([x, y, z]);
+        if (z < 0) z = -z;
+        
         let wind_dir = [0, 0];
 
         // prevailing winds
@@ -958,9 +971,10 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             wind_dir[1] = -wind_dir[1];
         }
 
-        wind_dir = [wind_speed*wind_dir[0], wind_speed*wind_dir[1]];
-
-        // TODO: noisify
+        // slowdown/speedup according to elevation change
+        // let blowsPast_r = getNextNeighbor(mesh, r, xyzFromLatLon(wind_dir), map);
+        // let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
+        // wind_speed *= 0.02*sigmoid(elevation_change);
 
         // Wind blows from cold to warm
         // TODO: this causes NaN temperatures and NaN wind
@@ -969,8 +983,8 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //     mesh.r_circulate_r(r_out, r);
         //     for (let neighbor_r of r_out) {
         //         if (isNaN(r_temperature[neighbor_r])) continue;
-        //         let [nx, ny, nz] = r_xyz.slice(3 * r, 3 * r + 3);
-        //         let {n_lat_deg, n_lon_deg, n_abs_lat_deg} = xyzToLatLon([x, y, z]);
+        //         let [nx, ny, nz] = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+        //         let [n_lat_deg, n_lon_deg, n_abs_lat_deg] = xyzToLatLon([nx, ny, nz]);
 
                 
         //         let d_lat = n_lat_deg - lat_deg,
@@ -979,8 +993,13 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //         if (mag === 0) continue;
 
         //         let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-        //         let speed = 0.001 * temperatureDifference;
+        //         let speed = 0.01 * temperatureDifference;
         //         let speedFactor = speed / mag;
+
+        //         if (isNaN(d_lat*speedFactor*d_lon)) {
+        //             console.log({n_lat_deg, n_lon_deg, lat_deg, lon_deg, d_lat, speedFactor, d_lon, temperatureDifference, neighbor_r, r})
+        //             crash
+        //         }
 
         //         wind_dir += [d_lat * speedFactor, d_lon * speedFactor];
         //     }
@@ -989,6 +1008,8 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
         let [dtheta, dphi] = wind_dir;
+        temp_temp_winddirs_0.push(wind_speed*wind_dir[0]);
+        temp_temp_winddirs_1.push(wind_speed*wind_dir[1]);
         let wind_blowsTo_lat_deg = lat_deg + dphi,
             wind_blowsTo_lon_deg = lon_deg + dtheta;
         let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
@@ -1003,7 +1024,10 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             wind_y = wind_blowsTo_y - y,
             wind_z = wind_blowsTo_z - z;
         
-        r_wind[r] = [wind_x, wind_y, wind_z];
+        let speedFactor = wind_speed / magnitude([wind_x, wind_y, wind_z]);
+        r_wind[r] = [speedFactor*wind_x, speedFactor*wind_y, speedFactor*wind_z];
+
+        // if (z > 0) r_wind[r] = [x,y,z];
 
         // // proof that the wind vectors are indeed tangent to the sphere
         // // even though they draw funny:
@@ -1028,24 +1052,12 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             
         //     crash;
         // }
-
-        
-        // slowdown/speedup according to elevation change
-        let blowsPast_r = getNextNeighbor(mesh, r, r_wind[r], map);
-        let oldSpeed = magnitude(r_wind[r]);
-        let newSpeed = oldSpeed + 2*10*(Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL));
-        let speedChangeFactor = oldSpeed === 0 ? 0 : (newSpeed / oldSpeed) / 100;
-
-        [wind_x, wind_y, wind_z] = r_wind[r];
-        r_wind[r] = [speedChangeFactor*wind_x, speedChangeFactor*wind_y, speedChangeFactor*wind_z];
-        
-        [wind_x, wind_y, wind_z] = r_wind[r];
-        if (isNaN(wind_x) || isNaN(wind_y) || isNaN(wind_z)) {
-            console.log("nan issue");
-            console.log({wind_x, wind_y, wind_z});
-            wind_x = wind_y = wind_z = 0;
-        }
     }
+
+    statsAnalysis(temp_temp_winddirs_0);
+    statsAnalysis(temp_temp_winddirs_1);
+    statsAnalysis_vectorMagnitude(r_wind, numRegions);
+    
 
     // statsAnalysis_vectorMagnitude(r_wind, numRegions);
 }
