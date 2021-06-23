@@ -1061,6 +1061,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
     }
 
     // finalize
+    // TODO: try putting humidity and temperature through a sigmoid funciton
     for (let r = 0; r < numRegions; r++) {
         r_temperature[r] = 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]);
     }
@@ -1124,6 +1125,7 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
     }
 
     // finalize
+    // TODO: try putting humidity and temperature through a sigmoid funciton
     for (let r = 0; r < numRegions; r++) {
         r_humidity[r] = 0.5*Math.max(0, r_newHumidity[r]);
     }
