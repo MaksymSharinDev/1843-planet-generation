@@ -1618,10 +1618,10 @@ let _draw_pending = false;
 function _draw() {
     let u_pointsize = 0.1 + 100 / Math.sqrt(N);
     let u_projection = mat4.create();
-    // mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
+    mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
     
-    mat4.rotate(u_projection, u_projection, -procession, [1, 0, 0]);
-    mat4.rotate(u_projection, u_projection, -tilt, [0, 1, 0]);
+    mat4.rotate(u_projection, u_projection, procession, [1, 0, 0]);
+    mat4.rotate(u_projection, u_projection, tilt, [0, 1, 0]);
     mat4.rotate(u_projection, u_projection, -rotation, [0, 0, 1]);
     // mat4.rotate(u_projection, u_projection, -Math.PI/2, [1, 0, 0]);
 
@@ -1713,7 +1713,7 @@ function _draw() {
         renderTriangles({
             u_projection,
             u_colormap: u_colormap_cloudcover,
-            u_radius: 1.001,
+            u_radius: 1.01,
             a_xyz: triangleGeometry.xyz,
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
