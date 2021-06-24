@@ -653,6 +653,14 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
     return {mountain_r, coastline_r, ocean_r};
 }
 
+// TODO: make hotspot trails (hawaii and such) by picking a starting point and following
+// the opposite direction of plate movement. make the end a wider blob but also submerged
+// TODO: make trails of shallow ocean starting from continents and extending in opposite direction of plate motion
+// TODO: make ocean-ocean convergence make trench on the side of the larger plate and coastline
+// on the side of the smaller
+// TODO: make ocean-continent convergence create trench and mountains
+// TODO: when doing these checks, make sure to check region type, not whole plate type (most plates are combination ocean/continent)
+// REF: Earth's REAL Lost Continents by Atlas Pro on Youtube
 function assignRegionElevation(mesh, {r_xyz, plate_is_ocean, r_plate, plate_vec, /* out */ r_elevation}) {
     const epsilon = 1e-3;
     let {numRegions} = mesh;
@@ -938,6 +946,17 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     let temp_temp_winddirs_0 = [];
     let temp_temp_winddirs_1 = [];
 
+    // TODO: try normalizing wind_dir just before converting to xyz (ie before calculating d_lat and d_lon)
+    // The smaller its magnitude, the more tangent the final vector will be to the sphere
+    // and thus the more accurate the final vector will be
+
+    // Note that the wind vectors will always look weird unless viewed straight on
+    // because they're lines tangent to the sphere, NOT lines laying flat on it like a shadow
+
+    // TODO: store r_latlon in the map data
+    // TODO: store r_wind_latlon ~~alongside~~ instead of r_wind_xyz
+    // TODO: make versions of getNextNeighbor and friends that accept a latlon vector instead of an xyz
+    //      NOTE: these functions will need to account for 357 being closer to 11 than 45 is to 11.
     
 
     for (let r = 0; r < numRegions; r++) {
@@ -1570,6 +1589,9 @@ function drawLongitudeLines(u_projection, lonDeg) {
     drawLongitudeLine(u_projection, -lonDeg, 10);
 }
 
+/*
+
+*/
 function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
     let line_xyz = [], line_rgba = [];
 
