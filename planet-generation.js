@@ -102,8 +102,8 @@ let draw_humidity = false;
 let draw_clouds = true;
 let draw_temperature_and_humidity = false;
 
-let SEA_LEVEL = 0.2;
-let SEED = 123;
+let SEA_LEVEL = 0.5;
+let SEED = 123; // 41 is pretty good too
 
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
@@ -1629,6 +1629,26 @@ function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
         count: line_xyz.length,
     });
 }
+function drawWindVectors_map(u_projection, mesh, {r_xyz, r_wind}, projectionFunciton) {
+    let line_xyz = [], line_rgba = [];
+
+    for (let r = 0; r < mesh.numRegions; r++) {
+        line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
+        line_rgba.push([0.3, 0.3, 1, 1]);
+        line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
+                               vec3.scale([], r_wind[r], 100 * 2 / Math.sqrt(N))));
+        line_rgba.push([1, 1, 1, 1]);
+    }
+
+    renderLines_map({
+        u_projection,
+        u_multiply_rgba: [1, 1, 1, 1],
+        u_add_rgba: [0, 0, 0, 0],
+        a_xyz: maps.createProjection(projectionFunciton, line_xyz),
+        a_rgba: line_rgba,
+        count: line_xyz.length,
+    });
+}
 
 function drawNormalVectors(u_projection, mesh, {r_xyz}) {
     let line_xyz = [], line_rgba = [];
@@ -1802,16 +1822,18 @@ function _draw() {
         drawLongitudeLines(u_projection, 0);
     }
 
-    
-    let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
-    renderTriangles_map({
-        u_projection: mat4.create(),
-        u_colormap: u_colormap_map,
-        u_radius: 1,
-        a_xyz: maps.createProjection(maps.equirectangular, triangleGeometry.xyz),
-        a_tm: triangleGeometry.tm,
-        count: triangleGeometry.xyz.length / 3,
-    });
+    if (true) {
+        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
+        renderTriangles_map({
+            u_projection: mat4.create(),
+            u_colormap: u_colormap_map,
+            u_radius: 1,
+            a_xyz: maps.createProjection(maps.equirectangular, triangleGeometry.xyz),
+            a_tm: triangleGeometry.tm,
+            count: triangleGeometry.xyz.length / 3,
+        });
+        drawWindVectors_map(mat4.create(), mesh, map, maps.equirectangular)
+    }
     // renderVectors_map({
     //     u_projection: mat4.create(),
     //     u_colormap: u_colormap_map,
