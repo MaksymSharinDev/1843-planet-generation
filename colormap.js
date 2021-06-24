@@ -150,3 +150,25 @@ function colormap_temperature_and_humidity() {
 }
 
 exports.colormap_temperature_and_humidity = colormap_temperature_and_humidity();
+
+function colormap_debug_solid_blue() {
+    const pixels = new Uint8Array(exports.width * exports.height * 4);
+
+    for (var y = 0, p = 0; y < exports.height; y++) {
+        for (let x = 0; x < exports.width; x++) {
+            let r, g, b, a;
+            
+            r = 0;
+            g = 0;
+            b = 255;
+
+            pixels[p++] = r;
+            pixels[p++] = g;
+            pixels[p++] = b;
+            pixels[p++] = 255;
+        }
+    }
+    return pixels;
+}
+
+exports.colormap_debug_solid_blue = colormap_debug_solid_blue();

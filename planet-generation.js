@@ -13,6 +13,7 @@ const colormap = require('./colormap');
 const {vec3, mat4} = require('gl-matrix');
 const {makeRandInt, makeRandFloat} = require('@redblobgames/prng');
 const SphereMesh = require('./sphere-mesh');
+const maps = require('./maps');
 
 const regl = require('regl')({
     canvas: "#output",
@@ -23,7 +24,11 @@ const draw_textureKey = ({texture}) => {
     var imgData = textureKey.createImageData(colormap.width, colormap.height);
     for (let i = 0; i < imgData.data.length; i++) { imgData.data[i] = texture[i]; }
     textureKey.putImageData(imgData, 0, 0, 0, 0, colormap.width, colormap.height);
-}
+};
+const regl_map = require('regl')({
+    canvas: "#map",
+    extensions: ['OES_element_index_uint', 'OES_standard_derivatives']
+});
 
 const u_colormap = regl.texture({
     width: colormap.width,
@@ -65,6 +70,15 @@ const u_colormap_temperature_and_humidity = regl.texture({
     wrapT: 'clamp'
 });
 
+const u_colormap_map = regl_map.texture({
+    width: colormap.width,
+    height: colormap.height,
+    data: colormap.colormap_standard,
+    wrapS: 'clamp',
+    wrapT: 'clamp'
+});
+
+
 const WATER_LEVEL = 0;
 
 /* UI parameters */
@@ -73,7 +87,7 @@ let P = 20;
 let jitter = 0.75;
 let rotation = -1;
 let tilt = 0.75;
-let procession = -1.1;
+let procession = 1.1;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
@@ -171,7 +185,7 @@ void main() {
 });
 
 
-const renderLines = regl({
+const renderLines_config = {
     frag: `
 precision mediump float;
 uniform vec4 u_multiply_rgba, u_add_rgba;
@@ -219,10 +233,11 @@ void main() {
         a_xyz: regl.prop('a_xyz'),
         a_rgba: regl.prop('a_rgba'),
     },
-});
+};
+const renderLines = regl(renderLines_config);
+const renderLines_map = regl_map(renderLines_config);
 
-
-const renderTriangles = regl({
+const renderTrianglesConfig = {
     blend: {
         enable: true,
         func: {
@@ -272,7 +287,9 @@ void main() {
         a_xyz: regl.prop('a_xyz'),
         a_tm: regl.prop('a_tm'),
     },
-});
+};
+const renderTriangles = regl(renderTrianglesConfig);
+const renderTriangles_map = regl_map(renderTrianglesConfig);
 
 const renderTriangles_linear = regl({
     blend: {
@@ -957,7 +974,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     // TODO: store r_wind_latlon ~~alongside~~ instead of r_wind_xyz
     // TODO: make versions of getNextNeighbor and friends that accept a latlon vector instead of an xyz
     //      NOTE: these functions will need to account for 357 being closer to 11 than 45 is to 11.
-    
+
 
     for (let r = 0; r < numRegions; r++) {
         let wind_speed = 0.02;
@@ -1590,7 +1607,7 @@ function drawLongitudeLines(u_projection, lonDeg) {
 }
 
 /*
-
+    TODO: draw vectors on map projection
 */
 function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
     let line_xyz = [], line_rgba = [];
@@ -1784,6 +1801,26 @@ function _draw() {
     if (draw_primeMeridian) {
         drawLongitudeLines(u_projection, 0);
     }
+
+    
+    let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
+    renderTriangles_map({
+        u_projection: mat4.create(),
+        u_colormap: u_colormap_map,
+        u_radius: 1,
+        a_xyz: maps.createProjection(maps.equirectangular, triangleGeometry.xyz),
+        a_tm: triangleGeometry.tm,
+        count: triangleGeometry.xyz.length / 3,
+    });
+    // renderVectors_map({
+    //     u_projection: mat4.create(),
+    //     u_colormap: u_colormap_map,
+    //     u_radius: 0.1,
+    //     a_xyz: maps.createProjection(maps.sinusoidal, triangleGeometry.xyz),
+    //     a_tm: triangleGeometry.tm,
+    //     count: triangleGeometry.xyz.length / 3,
+    // });
+    
     
 
 
