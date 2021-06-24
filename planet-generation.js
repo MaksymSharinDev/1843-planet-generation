@@ -976,6 +976,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     // TODO: make versions of getNextNeighbor and friends that accept a latlon vector instead of an xyz
     //      NOTE: these functions will need to account for 357 being closer to 11 than 45 is to 11.
 
+    const TEMPERATURE_INFLUENCE_FACTOR = 4;
 
     for (let r = 0; r < numRegions; r++) {
         let wind_speed = 0.02;
@@ -1034,24 +1035,16 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
                 if (mag === 0) continue;
 
                 let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-                let speed = 2 * temperatureDifference;
-                let speedFactor = speed / mag;
+                let influence = TEMPERATURE_INFLUENCE_FACTOR * temperatureDifference;
+                let influenceFactor = influence / mag;
 
-                if (isNaN(d_lat*speedFactor*d_lon)) {
-                    console.log({n_lat_deg, n_lon_deg, lat_deg, lon_deg, d_lat, speedFactor, d_lon, temperatureDifference, neighbor_r, r})
-                    crash
-                }
+                wind_dir[0] += d_lat * influenceFactor;
+                wind_dir[1] += d_lon * influenceFactor;
 
-                wind_dir[0] += d_lat * speedFactor;
-                wind_dir[1] += d_lon * speedFactor;
-
-                if (isNaN(wind_dir[0]) || isNaN(wind_dir[1]))
-                {
-                    console.log("ahah")
-                    console.log({temperatureDifference, speed, speedFactor, mag, wind_dir})
-                    crash;
-                }
             }
+
+            // add speed according to how much temperature difference there is and how in-line the wind is with that temp diff
+            wind_speed += (0.01 / TEMPERATURE_INFLUENCE_FACTOR) * Math.sqrt(wind_dir[0]*wind_dir[0] + wind_dir[1]*wind_dir[1]);
         }
 
         // theta is the around, phi is the up and down
@@ -1105,9 +1098,9 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         // }
     }
 
-    statsAnalysis(temp_temp_winddirs_0);
-    statsAnalysis(temp_temp_winddirs_1);
-    statsAnalysis_vectorMagnitude(r_wind, numRegions);
+    // statsAnalysis(temp_temp_winddirs_0);
+    // statsAnalysis(temp_temp_winddirs_1);
+    // statsAnalysis_vectorMagnitude(r_wind, numRegions);
     
 
     // statsAnalysis_vectorMagnitude(r_wind, numRegions);
@@ -1171,10 +1164,11 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
         
         // account for cloud cover
         if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
-        baseTemperature *= (1-Math.max(1, 2*r_clouds[r]));
+        baseTemperature -= 2 * (1-Math.max(1, 2*r_clouds[r]));
 
         // average with old temperature
-        r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
+        // r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
+        r_newTemperature[r] = baseTemperature;
 
         // wind
         let blownTo_r;
@@ -1206,7 +1200,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
     // account for rain
     for(let r = 0; r < numRegions; r++) {
         // rain occurs above cloud value 0.5
-        r_newTemperature[r] -= Math.max(0, r_clouds[r]-0.5);
+        r_newTemperature[r] -= 2 * Math.max(0, r_clouds[r]-0.5);
     }
 
     // account for wind
@@ -1221,7 +1215,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
     // finalize
     // TODO: try putting humidity and temperature through a sigmoid funciton
     for (let r = 0; r < numRegions; r++) {
-        r_temperature[r] = 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]);
+        r_temperature[r] = Math.max(0, 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]));
     }
 }
 
@@ -1241,8 +1235,10 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         // base humidity
         let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
 
-        // average with old temperature
-        r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
+        // // average with old humidity
+        // r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
+
+        r_newHumidity[r] = baseHumidity;
 
         // wind
         let blownTo_r;
@@ -1254,29 +1250,17 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         }
         
         if (!blownHumidity[blownTo_r]) blownHumidity[blownTo_r] = [];
-        blownHumidity[blownTo_r].push(r_newHumidity[r]); 
-    }
-
-    // diffusion
-    for (let r = 0; r < numRegions; r++) {
-        let r_out = [];
-        mesh.r_circulate_r(r_out, r);
-        let neighborAverage = 0;
-        for (let neighbor_r of r_out) {
-            neighborAverage += r_humidity[neighbor_r];
-        }
-        neighborAverage /= r_out.length;
-
-        r_newHumidity[r] = (3/4) * r_newHumidity[r] + (1/4) * neighborAverage;
+        blownHumidity[blownTo_r].push(r_humidity[r]); 
     }
 
     // account for rain
     for(let r = 0; r < numRegions; r++) {
         // rain occurs above cloud value 0.5
-        r_newHumidity[r] -= 2*Math.max(0, r_clouds[r]-0.5);
+        r_newHumidity[r] -= 0.01*2*Math.max(0, r_clouds[r]-0.5);
     }
 
     // account for wind
+    // TODO: do the humidity blown, humidity kept thing from clouds
     for(let r = 0; r < numRegions; r++) {
         let humidityBlown = average(blownHumidity[r] ? blownHumidity[r] : [r_newHumidity[r]]);
         // if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
@@ -1284,11 +1268,24 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         r_newHumidity[r] = (r_newHumidity[r] + humidityBlown) / 2;
         // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
     }
+    
+    // diffusion
+    for (let r = 0; r < numRegions; r++) {
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_newHumidity[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+
+        r_newHumidity[r] = (3/4) * r_newHumidity[r] + (1/4) * neighborAverage;
+    }
 
     // finalize
     // TODO: try putting humidity and temperature through a sigmoid funciton
     for (let r = 0; r < numRegions; r++) {
-        r_humidity[r] = 0.5*Math.max(0, r_newHumidity[r]);
+        r_humidity[r] = Math.max(0, r_newHumidity[r]);
     }
 }
 
@@ -1331,7 +1328,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
         r_newClouds[r] = cloudsKept;
         
         if (isNaN(r_newClouds[r])) {
-            console.log({cloudsBlown, cloudsKept, windspeed})
+            console.log({cloudsBlown, cloudsKept, windspeed, temperature: r_temperature[r], humidity: r_humidity[r]})
             crash
         }
 
