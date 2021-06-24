@@ -218,6 +218,7 @@ void main() {
         u_add_rgba: regl.prop('u_add_rgba'),
     },
 
+    // Interesting, this property keeps lines behind the planet from drawing
     blend: {
         enable: true,
         func: {src: 'one', dst: 'one minus src alpha'},
@@ -1033,7 +1034,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
                 if (mag === 0) continue;
 
                 let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-                let speed = 0.01 * temperatureDifference;
+                let speed = 2 * temperatureDifference;
                 let speedFactor = speed / mag;
 
                 if (isNaN(d_lat*speedFactor*d_lon)) {
@@ -1041,7 +1042,15 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
                     crash
                 }
 
-                wind_dir += [d_lat * speedFactor, d_lon * speedFactor];
+                wind_dir[0] += d_lat * speedFactor;
+                wind_dir[1] += d_lon * speedFactor;
+
+                if (isNaN(wind_dir[0]) || isNaN(wind_dir[1]))
+                {
+                    console.log("ahah")
+                    console.log({temperatureDifference, speed, speedFactor, mag, wind_dir})
+                    crash;
+                }
             }
         }
 
@@ -1629,7 +1638,7 @@ function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
         count: line_xyz.length,
     });
 }
-function drawWindVectors_map(u_projection, mesh, {r_xyz, r_wind}, projectionFunciton) {
+function drawWindVectors_map(u_projection, mesh, {r_xyz, r_wind}, projectionFunciton, mapProjectionResults) {
     let line_xyz = [], line_rgba = [];
 
     for (let r = 0; r < mesh.numRegions; r++) {
@@ -1644,7 +1653,7 @@ function drawWindVectors_map(u_projection, mesh, {r_xyz, r_wind}, projectionFunc
         u_projection,
         u_multiply_rgba: [1, 1, 1, 1],
         u_add_rgba: [0, 0, 0, 0],
-        a_xyz: maps.createProjection(projectionFunciton, line_xyz),
+        a_xyz: maps.createProjection_lines(projectionFunciton, line_xyz, mapProjectionResults).result,
         a_rgba: line_rgba,
         count: line_xyz.length,
     });
@@ -1822,17 +1831,18 @@ function _draw() {
         drawLongitudeLines(u_projection, 0);
     }
 
-    if (true) {
+    if (false) {
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
+        let projection = maps.createProjection(maps.equirectangular, triangleGeometry.xyz);
         renderTriangles_map({
             u_projection: mat4.create(),
             u_colormap: u_colormap_map,
             u_radius: 1,
-            a_xyz: maps.createProjection(maps.equirectangular, triangleGeometry.xyz),
+            a_xyz: projection.result,
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
         });
-        drawWindVectors_map(mat4.create(), mesh, map, maps.equirectangular)
+        drawWindVectors_map(mat4.create(), mesh, map, maps.equirectangular, projection)
     }
     // renderVectors_map({
     //     u_projection: mat4.create(),
