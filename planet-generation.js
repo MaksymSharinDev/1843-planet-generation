@@ -9,75 +9,11 @@
 
 const SimplexNoise = require('simplex-noise');
 const FlatQueue = require('flatqueue');
-const colormap = require('./colormap');
 const {vec3, mat4} = require('gl-matrix');
 const {makeRandInt, makeRandFloat} = require('@redblobgames/prng');
 const SphereMesh = require('./sphere-mesh');
 const maps = require('./maps');
-
-const regl = require('regl')({
-    canvas: "#output",
-    extensions: ['OES_element_index_uint', 'OES_standard_derivatives']
-});
-const textureKey = document.getElementById("textureKey").getContext('2d');
-const draw_textureKey = ({texture}) => {
-    var imgData = textureKey.createImageData(colormap.width, colormap.height);
-    for (let i = 0; i < imgData.data.length; i++) { imgData.data[i] = texture[i]; }
-    textureKey.putImageData(imgData, 0, 0, 0, 0, colormap.width, colormap.height);
-};
-const regl_map = require('regl')({
-    canvas: "#map",
-    extensions: ['OES_element_index_uint', 'OES_standard_derivatives']
-});
-
-const u_colormap = regl.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_standard,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
-const u_colormap_temperature = regl.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_temperature,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
-const u_colormap_humidity = regl.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_humidity,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
-const u_colormap_cloudcover = regl.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_cloudcover,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
-const u_colormap_temperature_and_humidity = regl.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_temperature_and_humidity,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
-const u_colormap_map = regl_map.texture({
-    width: colormap.width,
-    height: colormap.height,
-    data: colormap.colormap_standard,
-    wrapS: 'clamp',
-    wrapT: 'clamp'
-});
-
+const renderEngine = require('./render');
 
 const WATER_LEVEL = 0;
 
@@ -91,21 +27,21 @@ let procession = 1.1;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
+let draw_landBoundaries = false;
+let draw_elevationLines = false;
 let draw_equator = false;
 let draw_extraLat = true;
 let draw_primeMeridian = false;
-let draw_windVectors = true;//false;
+let draw_windVectors = false;
 let draw_normalVectors = false;
 
-let draw_temperature = false;
-let draw_humidity = false;
-let draw_clouds = true;
-let draw_temperature_and_humidity = false;
+let renderLayer = "surface";
 
 let SEA_LEVEL = 0.5;
 let SEED = 123; // 41 is pretty good too
 
 let mapNeedsRedraw = true;
+let globeNeedsRedraw = true;
 let mapProjectionType = maps.equirectangular;
 let draw_windVectors_map = true;
 
@@ -120,6 +56,8 @@ window.setProcession = newProcession => { procession = newProcession; draw(); };
 window.setDrawMode = newMode => { drawMode = newMode; draw(); };
 window.setDrawPlateVectors = flag => { draw_plateVectors = flag; draw(); };
 window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); };
+window.setDrawLandBoundaries = flag => { draw_landBoundaries = flag; draw(); }
+window.setDrawElevationLines = flag => { draw_elevationLines = flag; draw(); }
 window.setDrawEquator = flag => { draw_equator = flag; draw(); };
 window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
 window.setDrawPrimeMeridian = flag => { draw_primeMeridian = flag; draw(); };
@@ -127,19 +65,7 @@ window.setDrawExtraLat = flag => { draw_extraLat = flag; draw(); };
 window.setDrawWindVectors = flag => { draw_windVectors = flag; draw(); };
 window.setDrawNormalVectors = flag => { draw_normalVectors = flag; draw(); };
 
-window.setDrawTemperature = flag => { draw_temperature = flag; draw(); };
-window.setDrawHumidity = flag => { draw_humidity = flag; draw(); };
-window.setDrawClouds = flag => { draw_clouds = flag; draw(); };
-window.setRender = renderWhat => {
-    draw_temperature = draw_humidity = draw_clouds = draw_temperature_and_humidity = false;
-    if (renderWhat === "temperature") draw_temperature = true;
-    else if (renderWhat === "humidity") draw_humidity = true;
-    else if (renderWhat === "surfaceonly") draw_clouds = false;
-    else if (renderWhat === "normal") draw_clouds = true;
-    else if (renderWhat === "temperature_and_humidity") draw_temperature_and_humidity = true;
-
-    draw();
-};
+window.setRender = renderWhat => { renderLayer = renderWhat; draw(); };
 window.advanceWeather = () => { advanceWeather(mesh, map); draw(); }
 
 let advanceWeatherIntervalId;
@@ -163,255 +89,6 @@ window.setMapProjection = projectionName => {
     draw();
 };
 window.setDrawWindVectors_map = flag => {draw_windVectors_map = flag; mapNeedsRedraw = true; draw(); }
-
-const renderPoints = regl({
-    frag: `
-precision mediump float;
-void main() {
-   gl_FragColor = vec4(0, 0, 0, 1);
-}
-`,
-
-    vert: `
-precision mediump float;
-uniform mat4 u_projection;
-uniform float u_pointsize;
-attribute vec3 a_xyz;
-void main() {
-  gl_Position = u_projection * vec4(a_xyz, 1);
-  gl_PointSize = gl_Position.z > 0.0? 0.0 : u_pointsize;
-}
-`,
-
-    depth: {
-        enable: false,
-    },
-    
-    uniforms: {
-        u_projection: regl.prop('u_projection'),
-        u_pointsize: regl.prop('u_pointsize'),
-    },
-
-    primitive: 'points',
-    count: regl.prop('count'),
-    attributes: {
-        a_xyz: regl.prop('a_xyz'),
-    },
-});
-
-
-const renderLines_config = {
-    frag: `
-precision mediump float;
-uniform vec4 u_multiply_rgba, u_add_rgba;
-varying vec4 v_rgba;
-void main() {
-   gl_FragColor = v_rgba * u_multiply_rgba + u_add_rgba;
-}
-`,
-
-    vert: `
-precision mediump float;
-uniform mat4 u_projection;
-attribute vec3 a_xyz;
-attribute vec4 a_rgba;
-varying vec4 v_rgba;
-void main() {
-  vec4 pos = u_projection * vec4(a_xyz, 1);
-  v_rgba = (-2.0 * pos.z) * a_rgba;
-  gl_Position = pos;
-}
-`,
-
-    depth: {
-        enable: false,
-    },
-    
-    uniforms: {
-        u_projection: regl.prop('u_projection'),
-        u_multiply_rgba: regl.prop('u_multiply_rgba'),
-        u_add_rgba: regl.prop('u_add_rgba'),
-    },
-
-    // Interesting, this property keeps lines behind the planet from drawing
-    blend: {
-        enable: true,
-        func: {src: 'one', dst: 'one minus src alpha'},
-        equation: {
-            rgb: 'add',
-            alpha: 'add'
-        },
-        color: [0, 0, 0, 0],
-    },
-    primitive: 'lines',
-    count: regl.prop('count'),
-    attributes: {
-        a_xyz: regl.prop('a_xyz'),
-        a_rgba: regl.prop('a_rgba'),
-    },
-};
-const renderLines = regl(renderLines_config);
-const renderLines_map = regl_map(renderLines_config);
-
-const renderTrianglesConfig = {
-    blend: {
-        enable: true,
-        func: {
-            srcRGB: 'src alpha',
-            srcAlpha: 1,
-            dstRGB: 'one minus src alpha',
-            dstAlpha: 1
-        },
-        equation: {
-            rgb: 'add',
-            alpha: 'add'
-        },
-        color: [0, 0, 0, 0]
-    },
-
-    frag: `
-precision mediump float;
-uniform sampler2D u_colormap;
-varying vec2 v_tm;
-void main() {
-   float e = v_tm.x > 0.0? 0.5 * (v_tm.x * v_tm.x + 1.0) : 0.5 * (v_tm.x + 1.0);
-   gl_FragColor = texture2D(u_colormap, vec2(e, v_tm.y));
-}
-`,
-
-    vert: `
-precision mediump float;
-uniform mat4 u_projection;
-uniform float u_radius;
-attribute vec3 a_xyz;
-attribute vec2 a_tm;
-varying vec2 v_tm;
-void main() {
-  v_tm = a_tm;
-  gl_Position = u_projection * vec4(u_radius * a_xyz, 1);
-}
-`,
-
-    uniforms: {
-        u_colormap: regl.prop('u_colormap'),
-        u_projection: regl.prop('u_projection'),
-        u_radius: regl.prop('u_radius'),
-    },
-
-    count: regl.prop('count'),
-    attributes: {
-        a_xyz: regl.prop('a_xyz'),
-        a_tm: regl.prop('a_tm'),
-    },
-};
-const renderTriangles = regl(renderTrianglesConfig);
-const renderTriangles_map = regl_map(renderTrianglesConfig);
-
-const renderTriangles_linear = regl({
-    blend: {
-        enable: true,
-        func: {
-            srcRGB: 'src alpha',
-            srcAlpha: 1,
-            dstRGB: 'one minus src alpha',
-            dstAlpha: 1
-        },
-        equation: {
-            rgb: 'add',
-            alpha: 'add'
-        },
-        color: [0, 0, 0, 0]
-    },
-
-    frag: `
-precision mediump float;
-uniform sampler2D u_colormap;
-varying vec2 v_tm;
-void main() {
-   gl_FragColor = texture2D(u_colormap, vec2(v_tm.x, v_tm.y));
-}
-`,
-
-    vert: `
-precision mediump float;
-uniform mat4 u_projection;
-uniform float u_radius;
-attribute vec3 a_xyz;
-attribute vec2 a_tm;
-varying vec2 v_tm;
-void main() {
-  v_tm = a_tm;
-  gl_Position = u_projection * vec4(u_radius * a_xyz, 1);
-}
-`,
-
-    uniforms: {
-        u_colormap: regl.prop('u_colormap'),
-        u_projection: regl.prop('u_projection'),
-        u_radius: regl.prop('u_radius'),
-    },
-
-    count: regl.prop('count'),
-    attributes: {
-        a_xyz: regl.prop('a_xyz'),
-        a_tm: regl.prop('a_tm'),
-    },
-});
-
-
-const renderIndexedTriangles = regl({
-    frag: `
-#extension GL_OES_standard_derivatives : enable
-
-precision mediump float;
-
-uniform sampler2D u_colormap;
-uniform vec2 u_light_angle;
-uniform float u_inverse_texture_size, u_slope, u_flat, u_c, u_d, u_outline_strength;
-
-varying vec2 v_tm;
-void main() {
-   float e = v_tm.x > 0.0? 0.5 * (v_tm.x * v_tm.x + 1.0) : 0.5 * (v_tm.x + 1.0);
-   float dedx = dFdx(v_tm.x);
-   float dedy = dFdy(v_tm.x);
-   vec3 slope_vector = normalize(vec3(dedy, dedx, u_d * 2.0 * u_inverse_texture_size));
-   vec3 light_vector = normalize(vec3(u_light_angle, mix(u_slope, u_flat, slope_vector.z)));
-   float light = u_c + max(0.0, dot(light_vector, slope_vector));
-   float outline = 1.0 + u_outline_strength * max(dedx,dedy);
-   gl_FragColor = vec4(texture2D(u_colormap, vec2(e, v_tm.y)).rgb * light / outline, 1);
-}
-`,
-
-    vert: `
-precision mediump float;
-uniform mat4 u_projection;
-attribute vec3 a_xyz;
-attribute vec2 a_tm;
-varying vec2 v_tm;
-void main() {
-  v_tm = a_tm;
-  gl_Position = u_projection * vec4(a_xyz, 1);
-}
-`,
-
-    uniforms: {
-        u_colormap: regl.prop('u_colormap'),
-        u_projection: regl.prop('u_projection'),
-        u_light_angle: [Math.cos(Math.PI/3), Math.sin(Math.PI/3)],
-        u_inverse_texture_size: 1.0 / 2048,
-        u_d: 60,
-        u_c: 0.15,
-        u_slope: 6,
-        u_flat: 2.5,
-        u_outline_strength: 5,
-    },
-
-    elements: regl.prop('elements'),
-    attributes: {
-        a_xyz: regl.prop('a_xyz'),
-        a_tm: regl.prop('a_tm'),
-    },
-});
 
 /**********************************************************************
  * Geometry
@@ -1396,6 +1073,8 @@ function advanceWeather(mesh, map) {
     reassignRegionHumidity(mesh, map);
     reassignRegionClouds(mesh, map);
 
+    globeNeedsRedraw = true;
+
     // console.log("Stats for temperature, humidity, and clouds");
     // statsAnalysis(map.r_temperature);
     // statsAnalysis(map.r_humidity);
@@ -1467,430 +1146,51 @@ function generateMap() {
     draw();
 }
 
-
-function drawPlateVectors(u_projection, mesh, {r_xyz, r_plate, plate_vec}) {
-    let line_xyz = [], line_rgba = [];
-    
-    for (let r = 0; r < mesh.numRegions; r++) {
-        line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
-        line_rgba.push([1, 0, 0, 1]);
-        line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
-                               vec3.scale([], plate_vec[r_plate[r]], 2 / Math.sqrt(N))));
-        line_rgba.push([1, 1, 1, 1]);
-    }
-
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawPlateBoundaries(u_projection, mesh, {t_xyz, r_plate}) {
-    let line_xyz = [], line_rgba = [];
-    for (let s = 0; s < mesh.numSides; s++) {
-        let begin_r = mesh.s_begin_r(s),
-            end_r = mesh.s_end_r(s);
-        if (r_plate[begin_r] !== r_plate[end_r]) {
-            let inner_t = mesh.s_inner_t(s),
-                outer_t = mesh.s_outer_t(s);
-            line_xyz.push(t_xyz.slice(3 * inner_t, 3 * inner_t + 3),
-                          t_xyz.slice(3 * outer_t, 3 * outer_t + 3));
-            line_rgba.push([1, 0, 0, 1], [1, 0, 0, 1]);
-        }
-    }
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawRivers(u_projection, mesh, {t_xyz, s_flow}) {
-    let line_xyz = [], line_rgba = [];
-
-    for (let s = 0; s < mesh.numSides; s++) {
-        if (s_flow[s] > 1) {
-            let flow = 0.1 * Math.sqrt(s_flow[s]);
-            let inner_t = mesh.s_inner_t(s),
-                outer_t = mesh.s_outer_t(s);
-            line_xyz.push(t_xyz.slice(3 * inner_t, 3 * inner_t + 3),
-                          t_xyz.slice(3 * outer_t, 3 * outer_t + 3));
-            if (flow > 1) flow = 1;
-            let rgba_premultiplied = [0.2 * flow, 0.5 * flow, 0.7 * flow, flow];
-            line_rgba.push(rgba_premultiplied, rgba_premultiplied);
-        }
-    }
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-
-function drawAxis(u_projection) {
-    let line_xyz = [], line_rgba = [];
-
-    let radius = 1;
-
-    line_xyz.push([0,0,radius], [0,0,1.5*radius]);
-    line_rgba.push([0,0,0,1], [1,0,0,1]);
-
-    line_xyz.push([0,0,-radius], [0,0,-1.5*radius]);
-    line_rgba.push([0,0,0,1], [1,0,0,1]);
-        
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawLattitudeLine(u_projection, latDeg, lonStepDeg = 2, color = [1, 0, 0, 0]) {
-    if (Math.abs(latDeg) >= 90) return;
-
-    let line_xyz = [], line_rgba = [];
-
-    let latRad     = latDeg     / 180.0 * Math.PI,
-        lonStepRad = lonStepDeg / 180.0 * Math.PI;
-    let lonRad = 0;
-    
-    let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
-                     Math.cos(latRad) * Math.sin(lonRad),
-                     Math.sin(latRad)];
-
-    for (let lonRad = lonStepRad; lonRad <= 2*Math.PI; lonRad += lonStepRad) {
-        let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
-                          Math.cos(latRad) * Math.sin(lonRad),
-                          Math.sin(latRad)];
-
-        line_xyz.push(lastPoint, nextPoint);
-        line_rgba.push(color, color);
-
-        lastPoint = nextPoint;
-    }
-
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawLattitudeLines(u_projection, latDeg,  color = [1, 0, 0, 0.3]) {
-    drawLattitudeLine(u_projection,  latDeg, 10, color);
-    drawLattitudeLine(u_projection, -latDeg, 10, color);
-}
-
-function drawLongitudeLine(u_projection, lonDeg, latStepDeg = 2) {
-    if (Math.abs(lonDeg) >= 90) return;
-
-    let line_xyz = [], line_rgba = [];
-
-    let lonRad     = lonDeg     / 180.0 * Math.PI,
-        latStepRad = latStepDeg / 180.0 * Math.PI;
-    let latRad = 0.5*Math.PI;
-    
-    let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
-                     Math.cos(latRad) * Math.sin(lonRad),
-                     Math.sin(latRad)];
-
-    for (let latRad = 0.5*Math.PI + latStepRad; latRad <= 1.5*Math.PI; latRad += latStepRad) {
-        let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
-                          Math.cos(latRad) * Math.sin(lonRad),
-                          Math.sin(latRad)];
-
-        line_xyz.push(lastPoint, nextPoint);
-        line_rgba.push([1,0,0,1], [1,0,0,1]);
-
-        lastPoint = nextPoint;
-    }
-
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawLongitudeLines(u_projection, lonDeg) {
-    drawLongitudeLine(u_projection,  lonDeg, 10);
-    drawLongitudeLine(u_projection, -lonDeg, 10);
-}
-
-/*
-    TODO: draw vectors on map projection
-*/
-function drawWindVectors(u_projection, mesh, {r_xyz, r_wind}) {
-    let line_xyz = [], line_rgba = [];
-
-    for (let r = 0; r < mesh.numRegions; r++) {
-        line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
-        line_rgba.push([0.3, 0.3, 1, 1]);
-        line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
-                               vec3.scale([], r_wind[r], 100 * 2 / Math.sqrt(N))));
-        line_rgba.push([1, 1, 1, 1]);
-    }
-
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-function drawWindVectors_map(u_projection, mesh, {r_xyz, r_wind}, projectionFunciton, mapProjectionResults) {
-    let line_xyz = [], line_rgba = [];
-
-    for (let r = 0; r < mesh.numRegions; r++) {
-        line_xyz.push(r_xyz.slice(3 * r, 3 * r + 3));
-        line_rgba.push([0.3, 0.3, 1, 1]);
-        line_xyz.push(vec3.add([], r_xyz.slice(3 * r, 3 * r + 3),
-                               vec3.scale([], r_wind[r], 100 * 2 / Math.sqrt(N))));
-        line_rgba.push([1, 1, 1, 1]);
-    }
-
-    renderLines_map({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: maps.createProjection_lines(projectionFunciton, line_xyz, mapProjectionResults).result,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
-function drawNormalVectors(u_projection, mesh, {r_xyz}) {
-    let line_xyz = [], line_rgba = [];
-
-    for (let r = 0; r < mesh.numRegions; r++) {
-        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-
-        line_xyz.push([x, y, z]);
-        line_rgba.push([0, 0, 0, 1]);
-        line_xyz.push(vec3.add([], [x, y, z],
-                               vec3.scale([], [2*x, 2*y, 2*z], 2 / Math.sqrt(N))));
-        line_rgba.push([0, 1, 0, 1]);
-    }
-
-    renderLines({
-        u_projection,
-        u_multiply_rgba: [1, 1, 1, 1],
-        u_add_rgba: [0, 0, 0, 0],
-        a_xyz: line_xyz,
-        a_rgba: line_rgba,
-        count: line_xyz.length,
-    });
-}
-
 let _draw_pending = false;
 function _draw() {
-    let u_pointsize = 0.1 + 100 / Math.sqrt(N);
-    let u_projection = mat4.create();
-    mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
-    
-    mat4.rotate(u_projection, u_projection, procession, [1, 0, 0]);
-    mat4.rotate(u_projection, u_projection, tilt, [0, 1, 0]);
-    mat4.rotate(u_projection, u_projection, -rotation, [0, 0, 1]);
-    // mat4.rotate(u_projection, u_projection, -Math.PI/2, [1, 0, 0]);
+    renderEngine.draw({
+        all: {
+            mesh,
+            map,
+            N,
 
-    function r_color_fn(r) {
-        let m = map.r_moisture[r];
-        let e = map.r_elevation[r];
-        return [e, m];
-    }
+            layer: renderLayer,
+            generateVoronoiGeometry: generateVoronoiGeometry,
 
-    function r_color_fn_2(r) {
-        let h = map.r_humidity[r];
-        let t = map.r_temperature[r];
-        return [0, t];
-    }
-    function r_color_fn_3(r) {
-        let h = map.r_humidity[r];
-        let t = map.r_temperature[r];
-        return [0, h];
-    }
-    function r_color_fn_4(r) {
-        let h = map.r_clouds[r];
-        return [0, h];
-    }
-    function r_color_fn_5(r) {
-        return [map.r_temperature[r], map.r_humidity[r]];
-    }
+            draw_axis: true,
 
-    // physical features
+            draw_plateVectors,
+            draw_plateBoundaries,
+            draw_windVectors,
+            draw_normalVectors,
+            draw_equator,
+            draw_extraLat,
+            draw_primeMeridian,
+            draw_landBoundaries,
+            draw_elevationLines,
+        },
 
-    if (drawMode === 'centroid') {
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
-        renderTriangles({
-            u_projection,
-            u_colormap,
-            u_radius: 1,
-            a_xyz: triangleGeometry.xyz,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_standard
-        });
-    } else if (drawMode === 'quads') {
-        renderIndexedTriangles({
-            u_projection,
-            a_xyz: quadGeometry.xyz,
-            a_tm: quadGeometry.tm,
-            elements: quadGeometry.I,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_standard
-        });
-    }
+        globe: {
+            forceRedraw: globeNeedsRedraw,
+            surfaceMode: drawMode,
+            procession,
+            tilt,
+            rotation: -rotation,
 
-    drawRivers(u_projection, mesh, map);
-    
-    // gizmos
+            cloud_height: 0.1,
+        },
 
-    if (draw_temperature) {
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_2);
-        renderTriangles({
-            u_projection,
-            u_colormap: u_colormap_temperature,
-            u_radius: 1.001,
-            a_xyz: triangleGeometry.xyz,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_temperature
-        });
-    }
-    if (draw_humidity) {
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_3);
-        renderTriangles({
-            u_projection,
-            u_colormap: u_colormap_humidity,
-            u_radius: 1.001,
-            a_xyz: triangleGeometry.xyz,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_humidity
-        });
-    }
-    if (draw_clouds) {
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_4);
-        renderTriangles({
-            u_projection,
-            u_colormap: u_colormap_cloudcover,
-            u_radius: 1.01,
-            a_xyz: triangleGeometry.xyz,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_humidity
-        });
-    }
-    if (draw_temperature_and_humidity) {
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn_5);
-        renderTriangles_linear({
-            u_projection,
-            u_colormap: u_colormap_temperature_and_humidity,
-            u_radius: 1.001,
-            a_xyz: triangleGeometry.xyz,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        draw_textureKey({
-            texture: colormap.colormap_temperature_and_humidity
-        });
-    }
+        map: {
+            forceRedraw: mapNeedsRedraw,
+            draw_windVectors: draw_windVectors_map,
+            projection: mapProjectionType,
 
-    if (draw_plateVectors) {
-        drawPlateVectors(u_projection, mesh, map);
-    }
-    if (draw_plateBoundaries) {
-        drawPlateBoundaries(u_projection, mesh, map);
-    }
-    if (draw_windVectors) {
-        drawWindVectors(u_projection, mesh, map);
-    }
-    if (draw_normalVectors) {
-        drawNormalVectors(u_projection, mesh, map);    
-    }
+            draw_axis: false,
+        },
+    });
+    mapNeedsRedraw = false;
+    globeNeedsRedraw = false;
 
-    drawAxis(u_projection);
-
-    if (draw_equator || draw_extraLat) {
-        drawLattitudeLines(u_projection, 0, [0.6, 0, 0, 1]);
-    }
-    if (draw_extraLat) {
-        drawLattitudeLines(u_projection, 30, [0.2, 0, 0, 1]);
-        drawLattitudeLines(u_projection, 60, [0.2, 0, 0, 1]);
-    }
-    if (draw_primeMeridian) {
-        drawLongitudeLines(u_projection, 0);
-    }
-
-    if (mapNeedsRedraw) {
-        // TODO: clean up draw() so that it draws both the globe and the map with
-        // the same draw type and isn't a huge mess of code like it looks like it's going to be rn
-        let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
-        let projection = maps.createProjection(mapProjectionType, triangleGeometry.xyz);
-        renderTriangles_map({
-            u_projection: mat4.create(),
-            u_colormap: u_colormap_map,
-            u_radius: 1,
-            a_xyz: projection.result,
-            a_tm: triangleGeometry.tm,
-            count: triangleGeometry.xyz.length / 3,
-        });
-        
-        if (draw_windVectors_map) {
-            drawWindVectors_map(mat4.create(), mesh, map, mapProjectionType, projection)
-        }
-
-        mapNeedsRedraw = false;
-    }
-    // renderVectors_map({
-    //     u_projection: mat4.create(),
-    //     u_colormap: u_colormap_map,
-    //     u_radius: 0.1,
-    //     a_xyz: maps.createProjection(maps.sinusoidal, triangleGeometry.xyz),
-    //     a_tm: triangleGeometry.tm,
-    //     count: triangleGeometry.xyz.length / 3,
-    // });
-    
-    
-
-
-    // renderPoints({
-    //     u_projection,
-    //     u_pointsize,
-    //     a_xyz: map.r_xyz,
-    //     count: mesh.numRegions,
-    // });
     _draw_pending = false;
 }
 
