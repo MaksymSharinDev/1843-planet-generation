@@ -52,6 +52,17 @@ Colormap Key
 <figure>
   <canvas id="output" width="1024" height="1024"/>
 </figure>
+
+Map Controls
+<br/>
+
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="mercator" checked="true" autocomplete="off"/>Mercator</label>
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="equirectangular" autocomplete="off"/>Equirectangular</label>
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="sinusoidal" autocomplete="off"/>Sinusoidal</label>
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="naturalearth" autocomplete="off"/>Natural Earth</label>
+<br/>
+<label><input type="checkbox" oninput="setDrawWindVectors_map(this.checked)" autocomplete="off" checked="true"/>Wind vectors</label>
+
 <figure>
   <canvas id="map" width="1024" height="1024"/>
 </figure>

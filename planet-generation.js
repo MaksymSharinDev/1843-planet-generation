@@ -105,6 +105,10 @@ let draw_temperature_and_humidity = false;
 let SEA_LEVEL = 0.5;
 let SEED = 123; // 41 is pretty good too
 
+let mapNeedsRedraw = true;
+let mapProjectionType = maps.equirectangular;
+let draw_windVectors_map = true;
+
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
 window.setSeed = newSeed => { SEED = newSeed; generateMap(); };
@@ -148,6 +152,17 @@ window.startWeather = () => {
 window.pauseWeather = () => {
     clearInterval(advanceWeatherIntervalId); 
 };
+
+window.setMapProjection = projectionName => {
+    if (projectionName === "mercator") mapProjectionType = maps.mercator;
+    else if (projectionName === "equirectangular") mapProjectionType = maps.equirectangular;
+    else if (projectionName === "sinusoidal") mapProjectionType = maps.sinusoidal;
+    else if (projectionName === "naturalearth") mapProjectionType = maps.natural_earth;
+
+    mapNeedsRedraw = true;
+    draw();
+};
+window.setDrawWindVectors_map = flag => {draw_windVectors_map = flag; mapNeedsRedraw = true; draw(); }
 
 const renderPoints = regl({
     frag: `
@@ -1838,9 +1853,11 @@ function _draw() {
         drawLongitudeLines(u_projection, 0);
     }
 
-    if (false) {
+    if (mapNeedsRedraw) {
+        // TODO: clean up draw() so that it draws both the globe and the map with
+        // the same draw type and isn't a huge mess of code like it looks like it's going to be rn
         let triangleGeometry = generateVoronoiGeometry(mesh, map, r_color_fn);
-        let projection = maps.createProjection(maps.equirectangular, triangleGeometry.xyz);
+        let projection = maps.createProjection(mapProjectionType, triangleGeometry.xyz);
         renderTriangles_map({
             u_projection: mat4.create(),
             u_colormap: u_colormap_map,
@@ -1849,7 +1866,12 @@ function _draw() {
             a_tm: triangleGeometry.tm,
             count: triangleGeometry.xyz.length / 3,
         });
-        drawWindVectors_map(mat4.create(), mesh, map, maps.equirectangular, projection)
+        
+        if (draw_windVectors_map) {
+            drawWindVectors_map(mat4.create(), mesh, map, mapProjectionType, projection)
+        }
+
+        mapNeedsRedraw = false;
     }
     // renderVectors_map({
     //     u_projection: mat4.create(),
