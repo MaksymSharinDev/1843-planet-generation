@@ -1112,6 +1112,8 @@ function generateMesh() {
     map.r_clouds = new Array(mesh.numRegions);
     
     generateMap();
+
+    // TODO: eventually, simulate a game of Slay to draw country borders
 }
 
 function generateMap() {
