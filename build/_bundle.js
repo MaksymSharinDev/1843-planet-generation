@@ -10938,6 +10938,8 @@ function generateMesh() {
     map.r_clouds = new Array(mesh.numRegions);
     
     generateMap();
+
+    // TODO: eventually, simulate a game of Slay to draw country borders
 }
 
 function generateMap() {
@@ -11322,6 +11324,8 @@ const r_color_functions = {
     },
 };
 
+// TODO: add a colormap that has muted surface colors so that lines are easier to see
+// start with one that makes all colors much darker
 const colormaps = {
     surface: {
         width: colormap.width,
@@ -11373,6 +11377,10 @@ const renderEnvironments = {
         textures: {},
         shaders: {},
         r_color_functions: {},
+        
+        state: {
+            lastProjection: { projectionFunction: null, projectionData: null },
+        },
     },
     map: {
         regl: require('regl')({
@@ -11382,6 +11390,10 @@ const renderEnvironments = {
         textures: {},
         shaders: {},
         r_color_functions: {},
+        
+        state: {
+            lastProjection: { projectionFunction: null, projectionData: null },
+        },
     },
 }
 
@@ -11630,7 +11642,15 @@ function draw(options) {
         let projectionData;
         if (true || drawMode === 'centroid') {
             let triangleGeometry = envOptions.generateVoronoiGeometry(mesh, map, r_color_fn);
-            projectionData = xyzProjection(triangleGeometry.xyz);
+  
+            // Handle caching the projection
+            projectionData = !environment.state.lastProjection.projectionData || environment.state.lastProjection.projectionFunction !== envOptions.projection
+            ? xyzProjection(triangleGeometry.xyz)
+            : environment.state.lastProjection.projectionData;
+            
+            environment.state.lastProjection.projectionData = projectionData;
+            environment.state.lastProjection.projectionFunction = envOptions.projectionFunction;
+            // end caching
 
             let shader = envOptions.layer === "surface" || envOptions.layer === "surfaceonly"
                 ? environment.shaders.renderTriangles_withElevation
@@ -11737,6 +11757,8 @@ function draw(options) {
             );
         }
 
+        // TODO: colorcode plate boundaries on sliding scale:
+        // red: full convergent ----- white: neither ----- green: full divergent
         if (envOptions.draw_plateBoundaries) {
             drawFunctions.drawRegionBoundaries(
                 mesh, 
@@ -11837,6 +11859,12 @@ function draw(options) {
                 count: mesh.numRegions,
             });
         }
+
+        // TODO: test points, start with some xyz points that lie on the surface of the sphere
+        // and convert them to lat, lon
+        // draw both the lat lon lines and the xyz points separately
+        // then do the reverse (start with lat, lon)
+        // and then export the xyz to lat lon functions
     }
 }
 
