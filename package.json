@@ -17,7 +17,7 @@
         "@types/browserify": "*"
     },
     "scripts": {
-        "build": "browserify planet-generation.js -o build/_bundle.js",
+        "build": "browserify planet-generation.js -o _build_bundle.js",
         "watch": "budo planet-generation.js:build/_bundle.js --dir . --dir ../../ --live --onupdate 'yarn run build'"
     },
     "homepage": "https://claydigiorgio.github.io/1843-planet-generation"
