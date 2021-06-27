@@ -47,32 +47,46 @@ function xyzToLatLon_deg(x, y, z) {
     return [lat_rad * RAD2DEG, lon_rad * RAD2DEG];
 }
 
-function test() {
-    let latlon = [
-        [0, 0],
-        [10, 0],
-        [20, 0],
-        [-10, 0],
-        [-20, 0],
+function normalize(xyz) {
+    let [x, y, z] = xyz;
+    let mag = magnitude(xyz);
 
-        [90, 0],
-        [-90, 0],
-        [180, 0], // any lattitude greater than 180 or less than -180 is invalid, but these functions handle these cases very gracefully
-        [-180, 0], // and interpret them generously to mean [0, 180]. beautiful :)
-        
-        [0, 10],
-        [0, -10],
-        [0, 360],
-        [0, 370],
-    ];
-
-    let testU = ([lat, lon]) => {
-        let [x, y, z] = xyzFromLatLon_deg(lat, lon);
-
-        console.log([lat, lon] + " -> " + [x, y, z] + " -> " + xyzToLatLon_deg(x, y, z));
-    }
-
-    latlon.forEach(e => testU(e));
+    return [x/mag, y/mag, z/mag];
 }
 
-module.exports = { test, vectorSubtract, dot, magnitude, xyzFromLatLon_rad, xyzToLatLon_rad,  xyzFromLatLon_deg, xyzToLatLon_deg, RAD2DEG, DEG2RAD};
+function test() {
+    // let latlon = [
+    //     [0, 0],
+    //     [10, 0],
+    //     [20, 0],
+    //     [-10, 0],
+    //     [-20, 0],
+
+    //     [90, 0],
+    //     [-90, 0],
+    //     [180, 0], // any lattitude greater than 180 or less than -180 is invalid, but these functions handle these cases very gracefully
+    //     [-180, 0], // and interpret them generously to mean [0, 180]. beautiful :)
+        
+    //     [0, 10],
+    //     [0, -10],
+    //     [0, 360],
+    //     [0, 370],
+    // ];
+
+    // let testU = ([lat, lon]) => {
+    //     let [x, y, z] = xyzFromLatLon_deg(lat, lon);
+
+    //     console.log([lat, lon] + " -> " + [x, y, z] + " -> " + xyzToLatLon_deg(x, y, z));
+    // }
+
+    // latlon.forEach(e => testU(e));
+
+    console.log(xyzToLatLon_deg(-1, 0, 0));
+    console.log(xyzToLatLon_deg(1,  0, 0));
+    console.log(xyzToLatLon_deg(0, 0, -1));
+    console.log(xyzToLatLon_deg(0, 0,  1));
+    
+    
+}
+
+module.exports = { test, normalize, vectorSubtract, dot, magnitude, xyzFromLatLon_rad, xyzToLatLon_rad,  xyzFromLatLon_deg, xyzToLatLon_deg, RAD2DEG, DEG2RAD};

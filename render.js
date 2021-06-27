@@ -420,18 +420,10 @@ const drawFunctions = {
 
         let line_xyz = [], line_rgba = [];
 
-        let lonRad     = lonDeg     / 180.0 * Math.PI,
-            latStepRad = latStepDeg / 180.0 * Math.PI;
-        let latRad = 0.5*Math.PI;
-        
-        let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
-                        Math.cos(latRad) * Math.sin(lonRad),
-                        Math.sin(latRad)];
+        let lastPoint = util.xyzFromLatLon_deg(-90, lonDeg);
 
-        for (let latRad = 0.5*Math.PI + latStepRad; latRad <= 1.5*Math.PI; latRad += latStepRad) {
-            let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
-                            Math.cos(latRad) * Math.sin(lonRad),
-                            Math.sin(latRad)];
+        for (let latDeg = -90 + latStepDeg; latDeg <= 90; latDeg += latStepDeg) {
+            let nextPoint = util.xyzFromLatLon_deg(latDeg, lonDeg);
 
             line_xyz.push(lastPoint, nextPoint);
             line_rgba.push(color, color);
