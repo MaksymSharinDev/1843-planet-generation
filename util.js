@@ -49,11 +49,21 @@ function xyzToLatLon_deg(x, y, z) {
 
 function test() {
     let latlon = [
+        [0, 0],
         [10, 0],
         [20, 0],
         [-10, 0],
         [-20, 0],
+
+        [90, 0],
+        [-90, 0],
+        [180, 0], // any lattitude greater than 180 or less than -180 is invalid, but these functions handle these cases very gracefully
+        [-180, 0], // and interpret them generously to mean [0, 180]. beautiful :)
         
+        [0, 10],
+        [0, -10],
+        [0, 360],
+        [0, 370],
     ];
 
     let testU = ([lat, lon]) => {
