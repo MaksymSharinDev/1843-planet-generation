@@ -9808,9 +9808,9 @@ const WATER_LEVEL = 0;
 let N = 10000;
 let P = 20;
 let jitter = 0.75;
-let rotation = 0; //-1;
-let tilt = 0; //0.75;
-let procession = 0; //1.1;
+let rotation = -1;
+let tilt = 0.75;
+let procession = 1.1;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
@@ -11830,7 +11830,7 @@ function draw(options) {
         // z is in towards the screen
         // y is up and down
         // x is left and right
-        util.test();
+        // util.test();
     }
 }
 

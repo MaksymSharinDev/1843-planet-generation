@@ -835,7 +835,7 @@ function draw(options) {
         // z is in towards the screen
         // y is up and down
         // x is left and right
-        util.test();
+        // util.test();
     }
 }
 
