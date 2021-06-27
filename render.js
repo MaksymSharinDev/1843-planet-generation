@@ -2,6 +2,7 @@
 const colormap = require('./colormap');
 const maps = require('./maps');
 const {vec3, mat4} = require('gl-matrix');
+const util = require('./util');
 
 const textureKey = document.getElementById("textureKey").getContext('2d');
 const draw_textureKey = ({texture}) => {
@@ -33,6 +34,15 @@ const shaders = {
         
             depth: {
                 enable: false,
+            },
+            blend: {
+                enable: true,
+                func: {src: 'one', dst: 'one minus src alpha'},
+                equation: {
+                    rgb: 'add',
+                    alpha: 'add'
+                },
+                color: [0, 0, 0, 0],
             },
             
             uniforms: {
@@ -382,22 +392,12 @@ initRenderEnvironments();
 
 const drawFunctions = {
     drawLattitudeLine: (u_projection, latDeg, renderFunction, xyzSecondaryProjection, projectionData, lonStepDeg = 2, color = [1, 0, 0, 0]) => {
-        if (Math.abs(latDeg) >= 90) return;
-    
         let line_xyz = [], line_rgba = [];
-    
-        let latRad     = latDeg     / 180.0 * Math.PI,
-            lonStepRad = lonStepDeg / 180.0 * Math.PI;
-        let lonRad = 0;
         
-        let lastPoint = [Math.cos(latRad) * Math.cos(lonRad),
-                         Math.cos(latRad) * Math.sin(lonRad),
-                         Math.sin(latRad)];
-    
-        for (let lonRad = lonStepRad; lonRad <= 2*Math.PI; lonRad += lonStepRad) {
-            let nextPoint =  [Math.cos(latRad) * Math.cos(lonRad),
-                              Math.cos(latRad) * Math.sin(lonRad),
-                              Math.sin(latRad)];
+        let lastPoint = util.xyzFromLatLon_deg(latDeg, 0);
+
+        for (let lonDeg = lonStepDeg; lonDeg <= 360; lonDeg += lonStepDeg) {
+            let nextPoint =  util.xyzFromLatLon_deg(latDeg, lonDeg);
     
             line_xyz.push(lastPoint, nextPoint);
             line_rgba.push(color, color);
@@ -567,14 +567,22 @@ function draw(options) {
         //
         //
 
+        // TODO TODO TODO
+        // TODO: EVERYTHING'S MESSED UP, ESPECIALLY THE AXIS AND LAT/LON DRAWING
+        // I thought Y was Z and Z was Y
+        // z is in towards the screen
+        // y is up and down
+        // x is left and right
+
         let {mesh, map, N} = envOptions;
 
         let u_projection = mat4.create();
-        mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
+        mat4.scale(u_projection, u_projection, [1, 1, 0.5]); // avoid clipping
+        mat4.scale(u_projection, u_projection, [0.8, 0.8, 0.8]); // give the planet some room to breathe
         
-        mat4.rotate(u_projection, u_projection, envOptions.procession, [1, 0, 0]);
-        mat4.rotate(u_projection, u_projection, envOptions.tilt, [0, 1, 0]);
-        mat4.rotate(u_projection, u_projection, envOptions.rotation, [0, 0, 1]);
+        mat4.rotateY(u_projection, u_projection, envOptions.rotation);
+        mat4.rotateZ(u_projection, u_projection, envOptions.tilt);
+        mat4.rotateX(u_projection, u_projection, envOptions.procession);
 
         let texture = envOptions.layer === "surfaceonly" 
             ? environment.textures["surface"] 
@@ -788,10 +796,10 @@ function draw(options) {
 
             let radius = 1;
         
-            line_xyz.push([0,0,radius], [0,0,1.5*radius]);
+            line_xyz.push([0, radius, 0], [0, 1.5*radius, 0]);
             line_rgba.push([0,0,0,1], [1,0,0,1]);
         
-            line_xyz.push([0,0,-radius], [0,0,-1.5*radius]);
+            line_xyz.push([0, -radius, 0], [0, -1.5*radius, 0]);
             line_rgba.push([0,0,0,1], [1,0,0,1]);
                 
             environment.shaders.renderLines({
@@ -831,6 +839,11 @@ function draw(options) {
         // draw both the lat lon lines and the xyz points separately
         // then do the reverse (start with lat, lon)
         // and then export the xyz to lat lon functions
+
+        // z is in towards the screen
+        // y is up and down
+        // x is left and right
+        util.test();
     }
 }
 
