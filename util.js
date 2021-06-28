@@ -20,18 +20,48 @@ function magnitude(a) {
 // the two functions below took a TON of fiddling, but I think I finally have them right
 function xyzFromLatLon_rad(latRad, lonRad) {
     // https://math.stackexchange.com/a/989911
-    return [Math.cos(latRad) * Math.sin(lonRad),
+    return [Math.cos(latRad) * Math.cos(lonRad),
             Math.sin(latRad),
-            Math.cos(latRad) * Math.cos(lonRad)];
+            Math.cos(latRad) * Math.sin(lonRad)];
 }
 
 function xyzToLatLon_rad(x, y, z) {
     // formulas from https://gis.stackexchange.com/a/120685
     let r = magnitude([x,y,z]);
+    if (r === 0) return undefined;
+
+    let atan2 = (z, x) => {
+        if (x === 0) {
+            if (z > 0) return  Math.PI; // should be pi/2 ?
+            if (z < 0) return -Math.PI; // should be pi/2 ?
+            console.log("x and z was zero")
+            return undefined;
+        }
+
+        if (z === 0) {
+            if (x < 0) return  Math.PI; // should be pi/2 ?
+            if (x > 0) return -Math.PI; // should be pi/2 ?
+            console.log("z and x was zero")
+            return undefined;
+        } 
+
+        if (x >= 0) {
+            return Math.atan(z / x);// + Math.PI/2;
+        }
+        // something that should be returning PI is returning PI/2 instead
+
+        if (z >= 0) {
+            // if (Math.pow(Math.atan(z/x), 2) < 2 - Math.pow(Math.asin(y / r),2)) return Math.PI; // this is the case where things go sideways
+            
+            return Math.atan(z/x) + 1.5*Math.PI; //2*Math.PI; // this *2 arguably makes it worse, but lets lines render for some reason
+        } else {
+            return Math.atan(z/x) - Math.PI;
+        }
+    }
 
     return [
         Math.asin(y / r),
-        Math.atan2(x, z)
+        atan2(z, x)//Math.atan2(z, x) // issues when x is neg and z is pos
     ];
 }
 
@@ -54,7 +84,7 @@ function normalize(xyz) {
     return [x/mag, y/mag, z/mag];
 }
 
-function test() {
+function test_xyzlatlon() {
     // let latlon = [
     //     [0, 0],
     //     [10, 0],
@@ -89,4 +119,65 @@ function test() {
     
 }
 
-module.exports = { test, normalize, vectorSubtract, dot, magnitude, xyzFromLatLon_rad, xyzToLatLon_rad,  xyzFromLatLon_deg, xyzToLatLon_deg, RAD2DEG, DEG2RAD};
+
+function statsAnalysis_vectorMagnitude(vectors) {
+    let data = [];
+    for (let r = 0; r < vectors.length; r++) {
+        data.push(magnitude(vectors[r]));
+    }
+    statsAnalysis(data);
+}
+function statsAnalysis_neighborsDistance(mesh, {r_xyz}) {
+    let {numRegions} = mesh;
+    let distances = [];
+    for (let r = 0; r < numRegions; r++) {
+        let current_xyz = r_xyz.slice(3 * r, 3 * r + 3);
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        for (let neighbor_r of r_out) {
+            let neighbor_xyz = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+            let neighbor_dir = vectorSubtract(neighbor_xyz, current_xyz);
+
+            distances.push(magnitude(neighbor_dir));
+        }
+    }
+    statsAnalysis(data);
+}
+function statsAnalysis(data, do_histogram=false) {
+    let distances = data;
+
+    let average = 0;
+    let max = -1;
+    let min = 99999999;
+    for (let i = 0; i < distances.length; i++) {
+        average += distances[i];
+        max = Math.max(max, distances[i]);
+        min = Math.min(min, distances[i]);
+    }
+    average /= distances.length;
+    
+    let stddev = 0;
+    for (let i = 0; i < distances.length; i++) {
+        let tempx = distances[i] - average;
+        stddev += tempx*tempx;
+    }
+    stddev = Math.sqrt(stddev / distances.length);
+
+    let bins, stepsize;
+    if(do_histogram) {
+        const binCount = 50;
+        stepsize = (max-min) / binCount;
+        bins = new Array(binCount);
+        bins.fill(0);
+        for (let i = 0; i < distances.length; i++) {
+            let d = distances[i];
+            d -= min;
+            let bin = Math.floor(d / stepsize);
+            bins[bin]++;
+        }
+    }
+
+    console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
+}
+
+module.exports = { statsAnalysis, statsAnalysis_neighborsDistance, statsAnalysis_vectorMagnitude, test_xyzlatlon, normalize, vectorSubtract, dot, magnitude, xyzFromLatLon_rad, xyzToLatLon_rad,  xyzFromLatLon_deg, xyzToLatLon_deg, RAD2DEG, DEG2RAD};

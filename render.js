@@ -521,7 +521,10 @@ let defaultOptions = {
 
     forceRedraw: false,
     surfaceMode: "centroid",
+    
     projection: null,
+    centerLon: 0,
+    centerLat: 0,
 };
 
 function extractOptions(options, envName) {
@@ -572,9 +575,9 @@ function draw(options) {
         mat4.scale(u_projection, u_projection, [1, 1, 0.5]); // avoid clipping
         mat4.scale(u_projection, u_projection, [0.8, 0.8, 0.8]); // give the planet some room to breathe
         
-        mat4.rotateY(u_projection, u_projection, envOptions.rotation);
-        mat4.rotateZ(u_projection, u_projection, envOptions.tilt);
-        mat4.rotateX(u_projection, u_projection, envOptions.procession);
+        mat4.rotateZ(u_projection, u_projection, util.DEG2RAD * envOptions.tilt);
+        mat4.rotateX(u_projection, u_projection, util.DEG2RAD * envOptions.procession);
+        mat4.rotateY(u_projection, u_projection, util.DEG2RAD * envOptions.rotation);
 
         let texture = envOptions.layer === "surfaceonly" 
             ? environment.textures["surface"] 
@@ -586,7 +589,7 @@ function draw(options) {
 
         // TODO: add support in options for centerLat and centerLon
         let xyzProjection = envOptions.projection 
-            ? (xyz) => maps.createProjection(envOptions.projection, xyz)
+            ? (xyz) => maps.createProjection(envOptions.projection, xyz, util.DEG2RAD * envOptions.centerLat, util.DEG2RAD * envOptions.centerLon)
             : (xyz) => { return { result: xyz }; };
         
         let xyzSecondaryProjection = envOptions.projection
@@ -792,7 +795,7 @@ function draw(options) {
             line_rgba.push([0,0,0,1], [1,0,0,1]);
         
             line_xyz.push([0, -radius, 0], [0, -1.5*radius, 0]);
-            line_rgba.push([0,0,0,1], [1,0,0,1]);
+            line_rgba.push([1, 1, 1, 1], [1,0.6,0.6,1]);
                 
             environment.shaders.renderLines({
                 u_projection,

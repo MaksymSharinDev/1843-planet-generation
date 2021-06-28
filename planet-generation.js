@@ -14,6 +14,7 @@ const {makeRandInt, makeRandFloat} = require('@redblobgames/prng');
 const SphereMesh = require('./sphere-mesh');
 const maps = require('./maps');
 const renderEngine = require('./render');
+const util = require('./util');
 
 const WATER_LEVEL = 0;
 
@@ -21,13 +22,13 @@ const WATER_LEVEL = 0;
 let N = 10000;
 let P = 20;
 let jitter = 0.75;
-let rotation = -1;
-let tilt = 0.75;
-let procession = 1.1;
+let rotation = 0;
+let tilt = 20;
+let procession = -30;
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
-let draw_landBoundaries = false;
+let draw_landBoundaries =true; //false;
 let draw_elevationLines = false;
 let draw_equator = false;
 let draw_extraLat = true;
@@ -44,6 +45,7 @@ let mapNeedsRedraw = true;
 let globeNeedsRedraw = true;
 let mapProjectionType = maps.equirectangular;
 let draw_windVectors_map = true;
+let map_centerLon = 0;
 
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
@@ -89,6 +91,7 @@ window.setMapProjection = projectionName => {
     draw();
 };
 window.setDrawWindVectors_map = flag => {draw_windVectors_map = flag; mapNeedsRedraw = true; draw(); }
+window.setMapCenterLon = l => { map_centerLon = l; draw(); }
 
 /**********************************************************************
  * Geometry
@@ -516,9 +519,6 @@ function dot (a, b) {
     return ax*bx + ay*by + az*bz;
 }
 
-function magnitude(a) {
-    return Math.sqrt(dot(a, a));
-}
 
 function getNextNeighbor(mesh, current_r, dir, {r_xyz}) {
     let bestAngle = Math.Infinity;
@@ -532,7 +532,7 @@ function getNextNeighbor(mesh, current_r, dir, {r_xyz}) {
         let neighbor_xyz = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
         let neighbor_dir = vectorSubtract(neighbor_xyz, current_xyz);
 
-        let angleProportionate = dot(dir, neighbor_dir) / magnitude(neighbor_dir);
+        let angleProportionate = dot(dir, neighbor_dir) / util.magnitude(neighbor_dir);
 
         if (bestAngle === Math.Infinity || angleProportionate < bestAngle) {
             bestAngle = angleProportionate;
@@ -544,7 +544,7 @@ function getNextNeighbor(mesh, current_r, dir, {r_xyz}) {
 }
 
 function getNeighbor(mesh, current_r, dir, {r_xyz}) {
-    let dist = magnitude(dir);
+    let dist = util.magnitude(dir);
     let current_xyz = r_xyz.slice(3 * current_r, 3 * current_r + 3);
     let n_count = 0;
 
@@ -553,93 +553,34 @@ function getNeighbor(mesh, current_r, dir, {r_xyz}) {
 
         let next_r = getNextNeighbor(mesh, current_r, dir, {r_xyz});
         let next_xyz = r_xyz.slice(3 * next_r, 3 * next_r + 3);
-        dist -= magnitude(vectorSubtract(next_xyz, current_xyz));
+        dist -= util.magnitude(vectorSubtract(next_xyz, current_xyz));
 
         current_r = next_r;
         current_xyz = next_xyz;
     }
 
     console.error("Vector was too long, or something else went wrong.");
-    console.log({dir, mag: magnitude(dir)});
+    console.log({dir, mag: util.magnitude(dir)});
 
     return current_r;
 }
 
-function statsAnalysis_vectorMagnitude(vectors) {
-    let data = [];
-    for (let r = 0; r < vectors.length; r++) {
-        data.push(magnitude(vectors[r]));
-    }
-    statsAnalysis(data);
-}
-function statsAnalysis_neighborsDistance(mesh, {r_xyz}) {
-    let {numRegions} = mesh;
-    let distances = [];
-    for (let r = 0; r < numRegions; r++) {
-        let current_xyz = r_xyz.slice(3 * r, 3 * r + 3);
-        let r_out = [];
-        mesh.r_circulate_r(r_out, r);
-        for (let neighbor_r of r_out) {
-            let neighbor_xyz = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
-            let neighbor_dir = vectorSubtract(neighbor_xyz, current_xyz);
 
-            distances.push(magnitude(neighbor_dir));
-        }
-    }
-    statsAnalysis(data);
-}
-function statsAnalysis(data, do_histogram=false) {
-    let distances = data;
+// function xyzToLatLon(xyz, planetRadius = 1) {
+//     let [x, y, z] = xyz;
+//     let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+//         lon_deg = (180/Math.PI) * Math.atan2(y, x);
+//     let abs_lat_deg = Math.abs(lat_deg);
 
-    let average = 0;
-    let max = -1;
-    let min = 99999999;
-    for (let i = 0; i < distances.length; i++) {
-        average += distances[i];
-        max = Math.max(max, distances[i]);
-        min = Math.min(min, distances[i]);
-    }
-    average /= distances.length;
-    
-    let stddev = 0;
-    for (let i = 0; i < distances.length; i++) {
-        let tempx = distances[i] - average;
-        stddev += tempx*tempx;
-    }
-    stddev = Math.sqrt(stddev / distances.length);
+//     return [lat_deg, lon_deg, abs_lat_deg];
+// }
 
-    let bins, stepsize;
-    if(do_histogram) {
-        const binCount = 50;
-        stepsize = (max-min) / binCount;
-        bins = new Array(binCount);
-        bins.fill(0);
-        for (let i = 0; i < distances.length; i++) {
-            let d = distances[i];
-            d -= min;
-            let bin = Math.floor(d / stepsize);
-            bins[bin]++;
-        }
-    }
-
-    console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
-}
-
-function xyzToLatLon(xyz, planetRadius = 1) {
-    let [x, y, z] = xyz;
-    let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-        lon_deg = (180/Math.PI) * Math.atan2(y, x);
-    let abs_lat_deg = Math.abs(lat_deg);
-
-    return [lat_deg, lon_deg, abs_lat_deg];
-}
-
-function xyzFromLatLon([lat, lon], planetRadius = 1) {
-    let x = planetRadius * Math.cos(lon) * Math.sin(lat),
-        y = planetRadius * Math.sin(lon) * Math.sin(lat),
-        z = planetRadius * Math.cos(lat);
-    return [x, y, z];
-}
+// function xyzFromLatLon([lat, lon], planetRadius = 1) {
+//     let x = planetRadius * Math.cos(lon) * Math.sin(lat),
+//         y = planetRadius * Math.sin(lon) * Math.sin(lat),
+//         z = planetRadius * Math.cos(lat);
+//     return [x, y, z];
+// }
 
 function sigmoid(x) {
     return 1 / (1 + Math.exp(-x));
@@ -657,7 +598,7 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     let temp_temp_winddirs_1 = [];
 
     // TODO: try normalizing wind_dir just before converting to xyz (ie before calculating d_lat and d_lon)
-    // The smaller its magnitude, the more tangent the final vector will be to the sphere
+    // The smaller its util.magnitude, the more tangent the final vector will be to the sphere
     // and thus the more accurate the final vector will be
 
     // Note that the wind vectors will always look weird unless viewed straight on
@@ -677,22 +618,22 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
         // let abs_lat_deg = Math.abs(lat_deg);
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let [lat_deg, lon_deg, abs_lat_deg] = xyzToLatLon([x, y, z]);
-        if (z < 0) z = -z;
+        let [lat_deg, lon_deg] = util.xyzToLatLon_deg(x, y, z);
+        let abs_lat_deg = Math.abs(lat_deg);
 
         let wind_dir = [0, 0];
 
         // prevailing winds
         if (0 < abs_lat_deg && abs_lat_deg < 30) {
-            let trigterm = (Math.PI * (lat_deg-0 )) / (2 * 30);
-            wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
+            let trigterm = util.DEG2RAD * (lat_deg-0 ) / 30;
+            wind_dir = [Math.cos(trigterm), Math.sin(trigterm)];
         } else
         if (30 < abs_lat_deg && abs_lat_deg < 60) {
-            let trigterm = (Math.PI * (lat_deg-30)) / (2 * 30);
+            let trigterm = util.DEG2RAD * (lat_deg-30) / 30;
             wind_dir = [Math.cos(trigterm), -Math.sin(trigterm)];
         } else 
         if (60 < abs_lat_deg && abs_lat_deg < 90) {
-            let trigterm = (Math.PI * (lat_deg-60)) / (2 * 30);
+            let trigterm = util.DEG2RAD * (lat_deg-60) / 30;
             wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
         }
 
@@ -701,43 +642,42 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             wind_dir[1] = -wind_dir[1];
         }
 
-        // slowdown/speedup according to elevation change
-        let blowsPast_r = getNextNeighbor(mesh, r, xyzFromLatLon(wind_dir), map);
-        let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
-        wind_speed += 0.1*elevation_change;//*= 2*(sigmoid(elevation_change)-0.5); //*= (sigmoid(elevation_change)+0.5);
-        if(isNaN(wind_speed)) {
-            console.log(sigmoid(elevation_change)+0.5);
-            crash
-        }
+        // // slowdown/speedup according to elevation change
+        // let blowsPast_r = getNextNeighbor(mesh, r, util.xyzFromLatLon_deg(...wind_dir), map);
+        // let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
+        // wind_speed += 0.1*elevation_change;//*= 2*(sigmoid(elevation_change)-0.5); //*= (sigmoid(elevation_change)+0.5);
+        // if(isNaN(wind_speed)) {
+        //     console.log(sigmoid(elevation_change)+0.5);
+        //     crash
+        // }
 
-        // Wind blows from cold to warm
-        // TODO: this causes NaN temperatures and NaN wind
-        if (!isNaN(r_temperature[r])) {
-            let r_out = [];
-            mesh.r_circulate_r(r_out, r);
-            for (let neighbor_r of r_out) {
-                if (isNaN(r_temperature[neighbor_r])) continue;
-                let [nx, ny, nz] = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
-                let [n_lat_deg, n_lon_deg, n_abs_lat_deg] = xyzToLatLon([nx, ny, nz]);
+        // // Wind blows from cold to warm
+        // if (!isNaN(r_temperature[r])) {
+        //     let r_out = [];
+        //     mesh.r_circulate_r(r_out, r);
+        //     for (let neighbor_r of r_out) {
+        //         if (isNaN(r_temperature[neighbor_r])) continue;
+        //         let [nx, ny, nz] = r_xyz.slice(3 * neighbor_r, 3 * neighbor_r + 3);
+        //         let [n_lat_deg, n_lon_deg] = util.xyzToLatLon_deg(nx, ny, nz);
 
                 
-                let d_lat = n_lat_deg - lat_deg,
-                    d_lon = n_lon_deg - lon_deg;
-                let mag = magnitude([d_lat, d_lon, 0]);
-                if (mag === 0) continue;
+        //         let d_lat = n_lat_deg - lat_deg,
+        //             d_lon = n_lon_deg - lon_deg;
+        //         let mag = util.magnitude([d_lat, d_lon, 0]);
+        //         if (mag === 0) continue;
 
-                let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
-                let influence = TEMPERATURE_INFLUENCE_FACTOR * temperatureDifference;
-                let influenceFactor = influence / mag;
+        //         let temperatureDifference = r_temperature[neighbor_r] - r_temperature[r];
+        //         let influence = TEMPERATURE_INFLUENCE_FACTOR * temperatureDifference;
+        //         let influenceFactor = influence / mag;
 
-                wind_dir[0] += d_lat * influenceFactor;
-                wind_dir[1] += d_lon * influenceFactor;
+        //         wind_dir[0] += d_lat * influenceFactor;
+        //         wind_dir[1] += d_lon * influenceFactor;
 
-            }
+        //     }
 
-            // add speed according to how much temperature difference there is and how in-line the wind is with that temp diff
-            wind_speed += (0.01 / TEMPERATURE_INFLUENCE_FACTOR) * Math.sqrt(wind_dir[0]*wind_dir[0] + wind_dir[1]*wind_dir[1]);
-        }
+        //     // add speed according to how much temperature difference there is and how in-line the wind is with that temp diff
+        //     wind_speed += (0.01 / TEMPERATURE_INFLUENCE_FACTOR) * Math.sqrt(wind_dir[0]*wind_dir[0] + wind_dir[1]*wind_dir[1]);
+        // }
 
         // theta is the around, phi is the up and down
         // theta is longitude, phi is lattitude
@@ -746,19 +686,21 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         temp_temp_winddirs_1.push(wind_speed*wind_dir[1]);
         let wind_blowsTo_lat_deg = lat_deg + dphi,
             wind_blowsTo_lon_deg = lon_deg + dtheta;
-        let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
-            wind_blowsTo_lon_rad = (Math.PI/180) * wind_blowsTo_lon_deg;
+        // let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
+        //     wind_blowsTo_lon_rad = (Math.PI/180) * wind_blowsTo_lon_deg;
 
         
-        let wind_blowsTo_x = planetRadius * Math.cos(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
-            wind_blowsTo_y = planetRadius * Math.sin(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
-            wind_blowsTo_z = planetRadius * Math.cos(wind_blowsTo_lat_rad);
+        // let wind_blowsTo_x = planetRadius * Math.cos(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
+        //     wind_blowsTo_y = planetRadius * Math.sin(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
+        //     wind_blowsTo_z = planetRadius * Math.cos(wind_blowsTo_lat_rad);
+
+        let [wind_blowsTo_x, wind_blowsTo_y, wind_blowsTo_z] = util.xyzFromLatLon_deg(wind_blowsTo_lat_deg, wind_blowsTo_lon_deg);
 
         let wind_x = wind_blowsTo_x - x,
             wind_y = wind_blowsTo_y - y,
             wind_z = wind_blowsTo_z - z;
         
-        let mag = magnitude([wind_x, wind_y, wind_z]);
+        let mag = util.magnitude([wind_x, wind_y, wind_z]);
         mag = mag === 0 ? 1 : mag;
         let speedFactor = wind_speed / mag;
         r_wind[r] = [speedFactor*wind_x, speedFactor*wind_y, speedFactor*wind_z];
@@ -910,7 +852,7 @@ function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, 
         r_newTemperature[r] = (r_newTemperature[r] + tempBlown) / 2;
 
         // cooldown from wind blowing
-        r_newTemperature[r] -= 2*(magnitude(r_wind[r]) - 0.01);
+        r_newTemperature[r] -= 2*(util.magnitude(r_wind[r]) - 0.01);
     }
 
     // finalize
@@ -968,7 +910,7 @@ function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_t
         // if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
 
         r_newHumidity[r] = (r_newHumidity[r] + humidityBlown) / 2;
-        // r_temperature[r] += 0.5*(magnitude(r_wind[r]) - 5);
+        // r_temperature[r] += 0.5*(util.magnitude(r_wind[r]) - 5);
     }
     
     // diffusion
@@ -1024,7 +966,7 @@ function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /
             blownTo_r = r;
         }
         
-        let windspeed = magnitude(r_wind[r]);
+        let windspeed = util.magnitude(r_wind[r]);
         let cloudsBlown =r_newClouds[r]; //Math.max(0, Math.min(1, windspeed / 0.04)) * r_newClouds[r];
         let cloudsKept = 0;//(1-Math.max(0, Math.min(1, windspeed / 0.04))) * r_newClouds[r];
         r_newClouds[r] = cloudsKept;
@@ -1188,6 +1130,7 @@ function _draw() {
             projection: mapProjectionType,
 
             draw_axis: false,
+            centerLon: map_centerLon,
         },
     });
     mapNeedsRedraw = false;

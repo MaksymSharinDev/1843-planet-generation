@@ -1,16 +1,26 @@
 const util = require('./util');
 
-// TODO: rename to createSecondaryProjection
 exports.createProjection_lines = (projection, lines_xyz, {min, range}, centerLat=0, centerLon=0, planetRadius=1) => {
     let result = [];
 
     for (let r = 0; r < lines_xyz.length; r++) {
         let [x, y, z] = lines_xyz[r];
         let [nx, ny, nz] = projection([x, y, z], centerLat, centerLon, planetRadius);
-        x = 2 * ((nx-min)/range) - 1;
-        y = 2 * ((ny-min)/range) - 1;
-        z = 2 * ((nz-min)/range) - 1;
+        nx = 2 * ((nx-min)/range) - 1;
+        ny = 2 * ((ny-min)/range) - 1;
+        nz = 2 * ((nz-min)/range) - 1;
         result.push([nx, ny, nz]);
+    }
+
+    // remove lines that wrap around a seam in the map
+    // not perfect, but that's ok
+    for (let r = 0; r < result.length; r += 2) {
+        let xyz = result[r];
+        let xyz2 = result[r+1];
+
+        if (util.magnitude(xyz, xyz2) > 1) {
+            result[r+1] = [...xyz];
+        }
     }
 
     return {result};
@@ -22,6 +32,14 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
 
     let min = 99999999;
     let max = -99999999;
+    
+    // let test = [];
+
+    // let badTriangles = []; // foreach (x) => x and the next 8 elements are bad data (ie, 3 xyz triples starting at idx x)
+    // let lastxyz;
+    // let lastsrcxyz;
+    // let count = 0;
+    // let output = [];
     
     for (let r = 0; r < r_xyz.length/3; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
@@ -36,7 +54,43 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
         max = Math.max(ny, max);
         min = Math.min(nz, min);
         max = Math.max(nz, max);
+
+        // if (count > 0 && util.magnitude(lastxyz, [nx, ny, nz]) > 1) {
+        //     badTriangles.push(r-count);
+        //     output.push([x, y, z] + " ; " + lastsrcxyz + " -> " + util.xyzToLatLon_deg(x, y, z) + " ; " + util.xyzToLatLon_deg(...lastsrcxyz) + " -> " + [nx, ny, nz] + " ; " + lastxyz);
+        // }
+        // lastxyz = [nx, ny, nz];
+        // lastsrcxyz = [x, y, z];
+        // count = (count+1) % 3;
+
+        // if (-0.1 < nx && nx < 0.1) {
+        //     xdata.push(x);
+        //     ydata.push(y);
+        //     zdata.push(z);
+        // }
+
+        // test[r] = [x, y, z] + " -> ";
     }
+
+    // console.log(output);
+
+    // console.log(badTriangles.map((i) => {
+    //     let xyz1 = r_xyz.slice(3 * 3 * i + 0, 3 * 3 * i + 3);
+    //     let xyz2 = r_xyz.slice(3 * 3 * i + 3, 3 * 3 * i + 6);
+    //     let xyz3 = r_xyz.slice(3 * 3 * i + 6, 3 * 3 * i + 9);
+        
+    //     return [xyz1, xyz2, xyz3];
+    // }));
+
+    // util.statsAnalysis(xdata);
+    // util.statsAnalysis(ydata);
+    // util.statsAnalysis(zdata);
+
+    // console.log(util.xyzToLatLon_deg(...[ 0.7104270818768333, -0.447447726674183, -0.542612513582856 ]));
+    // console.log(util.xyzToLatLon_deg(...[ 0.7206956934886738, -0.42247528271210677, -0.5491164106541863 ]));
+    // console.log(util.xyzToLatLon_deg(...[ 0.7033963847193084, -0.44069237235793246, -0.5576950411374877 ]));
+    
+    
 
     let range = max - min;
 
@@ -44,8 +98,13 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
         let [nx, ny, nz] = result.slice(3 * r, 3 * r + 3);
         result[3*r+0] = 2 * ((nx-min)/range) - 1;
         result[3*r+1] = 2 * ((ny-min)/range) - 1;
-        result[3*r+2] = 2 * ((nz-min)/range) - 1;
+        result[3*r+2] = -1;//2 * ((nz-min)/range) - 1;
+
+        // test[r] += [result[3*r], result[3*r+1], result[3*r+2]];
     }
+
+    // console.log(test);
+    // console.log(util.xyzToLatLon_deg(...util.xyzFromLatLon_deg(0, -10)))
 
     return {result, max, min, range};
 }
@@ -56,22 +115,48 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
 exports.mercator = ([x, y, z], centerLat = 0, centerLon = 0, planetRadius = 1) => {
     let [lat, lon] = util.xyzToLatLon_rad(x, y, z);
 
-    let nx = planetRadius * (lon - centerLon);
+    lon = lon - centerLon;
+    // lon = (lon + (2*Math.PI)) % (2*Math.PI); 
+
+    // lat = (lat + (0.5*Math.PI)) % (2*Math.PI);
+
+    let nx = planetRadius * lon;
     let ny = planetRadius * Math.log(Math.tan((Math.PI/4) + (lat/2)));
     return [nx, ny, 0];
 }
 
+let count = 0;
 exports.equirectangular = ([x, y, z], centerLat = 0, centerLon = 0, planetRadius = 1) => {
-    let [lat, lon] = util.xyzToLatLon_rad(x, y, z);
+    let [lat, lon] = util.xyzToLatLon_deg(x, y, z);
 
-    let nx = planetRadius * (lon - centerLon);
-    let ny = planetRadius * (lat - centerLat);
+    // lon = lon > Math.PI / 2 ? lon + Math.PI : lon;
+    // lon = lon < -Math.PI / 2 ? lon - Math.PI : lon;
+    lon = lon - centerLon*util.RAD2DEG
+
+    // lon = (lon+360) % 360;
+    // lat = (lat+90) % 360;
+
+    let nx = planetRadius * (lon);
+    let ny = planetRadius * (lat);// - centerLat*util.RAD2DEG);
     
+    // if (lon>358 /*&& count++ < 5*/) {
+    //     // console.log([x, y, z] + " | " +lon + " | " + nx);
+        
+    //     ny = 500
+    //     // nx = 180
+    //     // if () crash
+    // }
+
     return [nx, ny, 0];
 }
 
 exports.sinusoidal = ([x, y, z], centerLat = 0, centerLon = 0, planetRadius = 1) => {
     let [lat, lon] = util.xyzToLatLon_rad(x, y, z);
+
+    // the below line proves that the issue is with 
+    // xyzToLatLon_rad - it has issues producing negative longitudes
+    // probably something to do with creating 0 instead of -180
+    lon = -lon;
 
     return [
         (lon - centerLon) * Math.cos(lat),

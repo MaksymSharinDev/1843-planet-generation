@@ -12,7 +12,7 @@
   <br/>
   <label><input type="checkbox" oninput="setDrawPlateVectors(this.checked)" autocomplete="off"/>Plate vectors</label>
   <label><input type="checkbox" oninput="setDrawPlateBoundaries(this.checked)" autocomplete="off"/>Plate boundaries</label>
-  <label><input type="checkbox" oninput="setDrawLandBoundaries(this.checked)" autocomplete="off"/>Land Boundaries</label>
+  <label><input type="checkbox" oninput="setDrawLandBoundaries(this.checked)" autocomplete="off" checked="true"/>Land Boundaries</label>
   <label><input type="checkbox" oninput="setDrawElevationLines(this.checked)" autocomplete="off"/>Elevation Lines</label>
   <label><input type="checkbox" oninput="setDrawWindVectors(this.checked)" autocomplete="off"/>Wind vectors</label>
   <label><input type="checkbox" oninput="setDrawNormalVectors(this.checked)" autocomplete="off"/>Normal vectors</label>
@@ -32,11 +32,11 @@
   <br/>
   Jitter: <input type="range" min="0" max="1" step="0.001" value="0.5" oninput="setJitter(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
   <br/>
-  Sphere rotation: <input type="range" min="-5" max="5" step="0.001" value="-1" oninput="setRotation(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+  Sphere rotation: <input type="range" min="-180" max="180" step="0.001" value="0" oninput="setRotation(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
   <br/>
-  Axial Tilt: <input type="range" min="-1" max="1" step="0.001" value="0.75" oninput="setTilt(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+  Axial Tilt: <input type="range" min="-45" max="45" step="0.001" value="20" oninput="setTilt(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
   <br/>
-  Procession: <input type="range" min="-0.5" max="3" step="0.001" value="1.1" oninput="setProcession(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+  Procession: <input type="range" min="-90" max="90" step="0.001" value="-30" oninput="setProcession(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
   <br/>
   SeaLevel: <input type="range" min="-1" max="1" step="0.001" value="0.5" oninput="setSeaLevel(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
   <br/>
@@ -63,14 +63,18 @@ Colormap Key
 Map Controls
 <br/>
 
-<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="mercator" checked="true" autocomplete="off"/>Mercator</label>
-<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="equirectangular" autocomplete="off"/>Equirectangular</label>
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="mercator" autocomplete="off"/>Mercator</label>
+<label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="equirectangular" checked="true" autocomplete="off"/>Equirectangular</label>
 <label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="sinusoidal" autocomplete="off"/>Sinusoidal</label>
 <label><input type="radio" name="mapProjectionType" onclick="setMapProjection(this.value);" value="naturalearth" autocomplete="off"/>Natural Earth</label>
 <br/>
 <label><input type="checkbox" oninput="setDrawWindVectors_map(this.checked)" autocomplete="off" checked="true"/>Wind vectors</label>
+<br/>
+CenterLon: <input type="range" min="-360" max="360" step="0.001" value="0" oninput="setMapCenterLon(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+<br/>
 
 <figure>
-  <canvas id="map" width="1024" height="1024"/>
+  <canvas id="map" width="2048" height="2048"/>
 </figure>
+
 <script src="./build.js"></script>
