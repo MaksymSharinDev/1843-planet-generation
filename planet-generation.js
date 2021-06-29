@@ -827,11 +827,11 @@ function assignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /*
             // a medium amount of rain (r_clouds[r] === 0.75) means -0.01 temperature
             addRain = -0.01 * (r_clouds[r] - 0.5) / 0.25;
         }
-        let addSun = (1-r_clouds[r])*(baseTemperature-0.5);
+        let addSun = (1-r_clouds[r])*(baseTemperature);
 
         let prevTempIgnoringBase = r_temperature[r] + (1-baseTemperature);
         let newBase = (3/4) * r_temperature[r] + (1/4) * neighborAverage;
-        r_temperature[r] = util.clamp(0,1, r_temperature[r] + 0.8*(1-prevTempIgnoringBase)*(addSun) - 0.6*(prevTempIgnoringBase)*(addRain+addCool) );
+        r_temperature[r] = util.clamp(0,1, newBase + 0.8*(1-prevTempIgnoringBase)*(addSun) - 0.6*(prevTempIgnoringBase)*(addRain+addCool) );
     }
 }
 
