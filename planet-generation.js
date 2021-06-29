@@ -25,6 +25,11 @@ let jitter = 0.75;
 let rotation = 0;
 let tilt = 20;
 let procession = -30;
+
+let map_dx = 0;
+let map_dy = 0;
+let map_zoom = 1;
+
 let drawMode = 'centroid';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
@@ -92,6 +97,49 @@ window.setMapProjection = projectionName => {
 };
 window.setDrawWindVectors_map = flag => {draw_windVectors_map = flag; mapNeedsRedraw = true; draw(); }
 window.setMapCenterLon = l => { map_centerLon = l; draw(); }
+
+window.setMapZoom = z => { map_zoom = z; draw(); }
+window.setMapDX = dx => { map_dx = dx; draw(); }
+window.setMapDY = dy => { map_dy = dy; draw(); }
+
+// let mapdragging = false;
+// let mousexy = [0, 0];
+// let mapcanvas = document.querySelector("#map");
+// let existing_mapdxdy = [0, 0];
+// mapcanvas.addEventListener('mousedown', (event) => {
+//     mapdragging = true;
+//     mousexy = [event.offsetX, event.offsetY];
+//     event.preventDefault();
+// });
+// mapcanvas.addEventListener('mouseup', (event) => {
+//     mapdragging = false;
+//     event.preventDefault();
+//     existing_mapdxdy = [map_dx, map_dy];
+// });
+// mapcanvas.addEventListener('mousemove', (event) => {
+//     if (!mapdragging) return true;
+//     let [x, y] = [event.offsetX, event.offsetY];
+//     let [ox, oy] = mousexy;
+//     let [ex, ey] = existing_mapdxdy;
+
+//     map_dx = (x - ox)*0.001/map_zoom + ex;
+//     map_dy = (-y - oy)*0.001/map_zoom + ey;
+
+//     map_dx = Math.min(1, Math.max(-1, map_dx));
+//     map_dy = Math.min(1, Math.max(-1, map_dy));
+
+//     event.preventDefault();
+//     draw();
+// });
+// mapcanvas.addEventListener('wheel', (event) => {
+//     event.preventDefault();
+//     map_zoom += -event.deltaY;
+//     map_zoom = Math.min(2, Math.max(0.5, map_zoom));
+//     draw();
+// });
+
+
+
 
 /**********************************************************************
  * Geometry
@@ -502,7 +550,7 @@ function assignFlow(mesh, {order_t, t_elevation, t_moisture, t_downflow_s, /* ou
 
 
 /**********************************************************************
- * Weaather
+ * Weaather - ref. https://github.com/weigert/proceduralweather
  */
 
 function vectorSubtract(a, b) {
@@ -591,11 +639,7 @@ function sigmoid(x) {
 // currrently, wind speeds follow this:
 // { min: 0, max: 0.09183723630842007, average: 0.01448420366929869, stddev: 0.00795346069581971 }
 function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* out */ r_wind}) {
-    const planetRadius = 1;
     let {numRegions} = mesh;
-
-    let temp_temp_winddirs_0 = [];
-    let temp_temp_winddirs_1 = [];
 
     // TODO: try normalizing wind_dir just before converting to xyz (ie before calculating d_lat and d_lon)
     // The smaller its util.magnitude, the more tangent the final vector will be to the sphere
@@ -609,14 +653,10 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
     // TODO: make versions of getNextNeighbor and friends that accept a latlon vector instead of an xyz
     //      NOTE: these functions will need to account for 357 being closer to 11 than 45 is to 11.
 
-    const TEMPERATURE_INFLUENCE_FACTOR = 4;
+    const TEMPERATURE_INFLUENCE_FACTOR = 2;
 
     for (let r = 0; r < numRegions; r++) {
         let wind_speed = 0.02;
-        // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-        //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
-        // let abs_lat_deg = Math.abs(lat_deg);
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let [lat_deg, lon_deg] = util.xyzToLatLon_deg(x, y, z);
         let abs_lat_deg = Math.abs(lat_deg);
@@ -625,16 +665,16 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
 
         // prevailing winds
         if (0 < abs_lat_deg && abs_lat_deg < 30) {
-            let trigterm = util.DEG2RAD * (lat_deg-0 ) / 30;
-            wind_dir = [Math.cos(trigterm), Math.sin(trigterm)];
+            let trigterm = (Math.PI/2) * (lat_deg-0 ) / 30;
+            wind_dir = [-Math.cos(trigterm), Math.sin(trigterm)];
         } else
         if (30 < abs_lat_deg && abs_lat_deg < 60) {
-            let trigterm = util.DEG2RAD * (lat_deg-30) / 30;
-            wind_dir = [Math.cos(trigterm), -Math.sin(trigterm)];
+            let trigterm = (Math.PI/2) * (lat_deg-30) / 30;
+            wind_dir = [Math.sin(trigterm), -Math.cos(trigterm)];
         } else 
         if (60 < abs_lat_deg && abs_lat_deg < 90) {
-            let trigterm = util.DEG2RAD * (lat_deg-60) / 30;
-            wind_dir = [-Math.sin(trigterm), Math.cos(trigterm)];
+            let trigterm = (Math.PI/2) * (lat_deg-60) / 30;
+            wind_dir = [-Math.cos(trigterm), Math.sin(trigterm)];
         }
 
         if (z < 0) {
@@ -642,16 +682,8 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
             wind_dir[1] = -wind_dir[1];
         }
 
-        // // slowdown/speedup according to elevation change
-        // let blowsPast_r = getNextNeighbor(mesh, r, util.xyzFromLatLon_deg(...wind_dir), map);
-        // let elevation_change = Math.max(r_elevation[r], WATER_LEVEL) - Math.max(r_elevation[blowsPast_r], WATER_LEVEL);
-        // wind_speed += 0.1*elevation_change;//*= 2*(sigmoid(elevation_change)-0.5); //*= (sigmoid(elevation_change)+0.5);
-        // if(isNaN(wind_speed)) {
-        //     console.log(sigmoid(elevation_change)+0.5);
-        //     crash
-        // }
 
-        // // Wind blows from cold to warm
+        // // // Wind blows from cold to warm
         // if (!isNaN(r_temperature[r])) {
         //     let r_out = [];
         //     mesh.r_circulate_r(r_out, r);
@@ -676,36 +708,21 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //     }
 
         //     // add speed according to how much temperature difference there is and how in-line the wind is with that temp diff
-        //     wind_speed += (0.01 / TEMPERATURE_INFLUENCE_FACTOR) * Math.sqrt(wind_dir[0]*wind_dir[0] + wind_dir[1]*wind_dir[1]);
+        //     wind_speed += 0.6* (0.01 / TEMPERATURE_INFLUENCE_FACTOR) * Math.sqrt(wind_dir[0]*wind_dir[0] + wind_dir[1]*wind_dir[1]);
         // }
 
-        // theta is the around, phi is the up and down
-        // theta is longitude, phi is lattitude
-        let [dtheta, dphi] = wind_dir;
-        temp_temp_winddirs_0.push(wind_speed*wind_dir[0]);
-        temp_temp_winddirs_1.push(wind_speed*wind_dir[1]);
-        let wind_blowsTo_lat_deg = lat_deg + dphi,
-            wind_blowsTo_lon_deg = lon_deg + dtheta;
-        // let wind_blowsTo_lat_rad = (Math.PI/180) * wind_blowsTo_lat_deg,
-        //     wind_blowsTo_lon_rad = (Math.PI/180) * wind_blowsTo_lon_deg;
+        // slowdown/speedup according to elevation change
+        let blowsPast_r = getNextNeighbor(mesh, r, util.xyzFromLatLon_deg(...wind_dir), map);
+        let elevation_change = Math.max(r_elevation[blowsPast_r], WATER_LEVEL) - Math.max(r_elevation[r], WATER_LEVEL);
+        wind_speed += 0.1*elevation_change;//*= 2*(sigmoid(elevation_change)-0.5); //*= (sigmoid(elevation_change)+0.5);
+        if(isNaN(wind_speed)) {
+            console.log(sigmoid(elevation_change)+0.5);
+            crash
+        }
 
-        
-        // let wind_blowsTo_x = planetRadius * Math.cos(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
-        //     wind_blowsTo_y = planetRadius * Math.sin(wind_blowsTo_lon_rad) * Math.sin(wind_blowsTo_lat_rad),
-        //     wind_blowsTo_z = planetRadius * Math.cos(wind_blowsTo_lat_rad);
 
-        let [wind_blowsTo_x, wind_blowsTo_y, wind_blowsTo_z] = util.xyzFromLatLon_deg(wind_blowsTo_lat_deg, wind_blowsTo_lon_deg);
-
-        let wind_x = wind_blowsTo_x - x,
-            wind_y = wind_blowsTo_y - y,
-            wind_z = wind_blowsTo_z - z;
-        
-        let mag = util.magnitude([wind_x, wind_y, wind_z]);
-        mag = mag === 0 ? 1 : mag;
-        let speedFactor = wind_speed / mag;
-        r_wind[r] = [speedFactor*wind_x, speedFactor*wind_y, speedFactor*wind_z];
-
-        // if (z > 0) r_wind[r] = [x,y,z];
+        let [wind_x, wind_y, wind_z] = util.deg_latlonVectorAt_to_xyzVector(wind_dir, [lat_deg, lon_deg], [x, y, z]);
+        r_wind[r] = util.setMagnitude([wind_x, wind_y, wind_z], wind_speed); 
 
         // // proof that the wind vectors are indeed tangent to the sphere
         // // even though they draw funny:
@@ -716,40 +733,105 @@ function assignRegionWindVectors(mesh, {r_xyz, r_elevation, r_temperature, /* ou
         //     console.log(angle);
         //     crash;
         // }
-
-        // if (dot([wind_x, wind_y, wind_z], [x, y, z]) != -0.0602189418300005) {
-        //     console.log("something went wrong");
-        //     console.log(dot([wind_x, wind_y, wind_z], [x, y, z]))
-            
-        //     let wind_blowsTo_cartesian = [wind_blowsTo_x, wind_blowsTo_y, wind_blowsTo_z];
-        //     let wind_blowsTo_spherical = [wind_blowsTo_lat_deg, wind_blowsTo_lon_deg];
-        //     let wind = [wind_x, wind_y, wind_z];
-        //     let r_loc= [x, y, z];
-        //     console.log({lat_deg, lon_deg, dtheta, dphi, r_loc, wind_blowsTo_cartesian, wind_blowsTo_spherical, wind});
-            
-            
-        //     crash;
-        // }
     }
-
-    // statsAnalysis(temp_temp_winddirs_0);
-    // statsAnalysis(temp_temp_winddirs_1);
-    // statsAnalysis_vectorMagnitude(r_wind, numRegions);
-    
-
-    // statsAnalysis_vectorMagnitude(r_wind, numRegions);
 }
 
-function assignRegionTemperature(mesh, {r_xyz, r_elevation, /* out */ r_temperature}) {
+// TODO: ocean currents - https://cdn.britannica.com/91/53891-050-3CDF0E7C/ocean-systems-world.jpg
+// I think this will end up being a pretty difficult problem
+// This might be a good place to start: https://en.wikipedia.org/wiki/Flow_network
+// function assignRegionCurrent(mesh, {r_xyz, r_elevation, /* out */ r_current}) {
+//     let {numRegions} = mesh;
+
+//     // TODO: try normalizing wind_dir just before converting to xyz (ie before calculating d_lat and d_lon)
+//     // The smaller its util.magnitude, the more tangent the final vector will be to the sphere
+//     // and thus the more accurate the final vector will be
+
+//     // Note that the wind vectors will always look weird unless viewed straight on
+//     // because they're lines tangent to the sphere, NOT lines laying flat on it like a shadow
+
+//     // TODO: store r_latlon in the map data
+//     // TODO: store r_wind_latlon ~~alongside~~ instead of r_wind_xyz
+//     // TODO: make versions of getNextNeighbor and friends that accept a latlon vector instead of an xyz
+//     //      NOTE: these functions will need to account for 357 being closer to 11 than 45 is to 11.
+
+//     const TEMPERATURE_INFLUENCE_FACTOR = 2;
+
+//     for (let r = 0; r < numRegions; r++) {
+//         let current_speed = 0.02;
+//         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+//         let [lat_deg, lon_deg] = util.xyzToLatLon_deg(x, y, z);
+//         let abs_lat_deg = Math.abs(lat_deg);
+
+//         let current_dir = [0, 0];
+
+//         // prevailing winds
+//         if (0 < abs_lat_deg && abs_lat_deg < 30) {
+//             current_dir = [-1, 0];
+//         } else
+//         if (30 < abs_lat_deg && abs_lat_deg < 60) {
+//             current_dir = [1, 0];
+//         } else 
+//         if (60 < abs_lat_deg && abs_lat_deg < 90) {
+//             current_dir = [-1, 0];
+//         }
+
+//         if (z < 0) {
+//             // southern hemisphere
+//             current_dir[1] = -current_dir[1];
+//         }
+//     }
+
+//     let [current_x, current_y, current_z] = util.deg_latlonVectorAt_to_xyzVector(current_dir, [lat_deg, lon_deg]);
+//     r_current[r] = util.setMagnitude([current_x, current_y, current_z], current_speed);
+
+// }
+
+function assignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /* out */ r_temperature, /* out r_watertemperature */}) {
     const planetRadius = 1;
     let {numRegions} = mesh;
 
+    let r_newTemperature = new Array(numRegions);
+
     for (let r = 0; r < numRegions; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+        let [lat_deg, lon_deg] = util.xyzToLatLon_deg(x, y, z);
+        lat_deg = 90 - Math.abs(lat_deg); // TODO: add seasons by adding/subtracting some value from lat_deg before calling math abs
 
-        r_temperature[r] = (1-r_elevation[r]) * lat_deg / 90;
+        // base temperature
+        let elevation = Math.min(1, Math.abs(r_elevation[r]));
+        elevation = r_elevation[r] < 0 ? 0.25*elevation : 0.75*elevation;
+        let baseTemperature = util.clamp(0, 1, (1-elevation) * lat_deg / 90);
+        
+        // r_watertemperature[r] = baseTemperature;
+
+        if (r_temperature[r] === undefined || r_wind[r] === undefined || r_clouds[r] === undefined) {
+            r_temperature[r] = baseTemperature;
+            continue;
+        }
+
+        // diffusion
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_temperature[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+        if (r_out.length === 0)  console.error("no neighbors");
+
+        // rising wind cools (we're considering slow wind to be rising due to how windspeed is calculated depending on elevation difference)
+        let addCool = -Math.min(0, 2.5*(util.magnitude(r_wind[r])/0.04 - 0.5));
+        let addRain = 0;
+        if(r_clouds[r] > 0.5){
+            //Rain Reduces Temperature
+            // a medium amount of rain (r_clouds[r] === 0.75) means -0.01 temperature
+            addRain = -0.01 * (r_clouds[r] - 0.5) / 0.25;
+        }
+        let addSun = (1-r_clouds[r])*(baseTemperature-0.5);
+
+        let prevTempIgnoringBase = r_temperature[r] + (1-baseTemperature);
+        let newBase = (3/4) * r_temperature[r] + (1/4) * neighborAverage;
+        r_temperature[r] = util.clamp(0,1, r_temperature[r] + 0.8*(1-prevTempIgnoringBase)*(addSun) - 0.6*(prevTempIgnoringBase)*(addRain+addCool) );
     }
 }
 
@@ -757,7 +839,9 @@ function assignRegionHumidity(mesh, {r_elevation, r_temperature, /* out */ r_hum
     let {numRegions} = mesh;
 
     for (let r = 0; r < numRegions; r++) {
-        r_humidity[r] = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
+        // TODO: base humidity on water temperature, not air temperature
+        // r_humidity[r] = reigonIsWater(r_elevation, r) ? r_watertemperature[r] * r_watertemperature[r] + 0.1 : 0;
+        r_humidity[r] = reigonIsWater(r_elevation, r) ? r_temperature[r] * r_temperature[r] + 0.1 : 0;
     }
 }
 
@@ -780,240 +864,241 @@ function sum(list) {
     return retval;
 }
 
-// TODO: go back to the way the reference does it
-function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /* in/out */ r_temperature}) {
-    const planetRadius = 1;
-    let {numRegions} = mesh;
-    let r_newTemperature = new Array(numRegions);
+// // TODO: go back to the way the reference does it
+// // TODO: don't let windspeed affect region temperature - windspeed should affect cloud formation directly (low speed = more clouds)
+// function reassignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /* in/out */ r_temperature}) {
+//     const planetRadius = 1;
+//     let {numRegions} = mesh;
+//     let r_newTemperature = new Array(numRegions);
     
-    let r_blownFrom = new Array(numRegions);
+//     let r_blownFrom = new Array(numRegions);
 
-    const PERSISTENCE = 0.85;
+//     const PERSISTENCE = 0.85;
     
-    for (let r = 0; r < numRegions; r++) {
-        let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-            lon_deg = (180/Math.PI) * Math.atan2(y, x);
+//     for (let r = 0; r < numRegions; r++) {
+//         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+//         let [lat_deg, lon_deg] = util.xyzToLatLon_deg(x, y, z);
 
-        // base temperature
-        let baseTemperature = (1-r_elevation[r]) * lat_deg / 90;
-        baseTemperature = PERSISTENCE*r_temperature[r] + (1-PERSISTENCE)*baseTemperature;
-
-        // account for cloud cover
-        if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
-        baseTemperature -= 2 * (1-Math.max(1, 2*r_clouds[r]));
-
-        // average with old temperature
-        // r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
-        r_newTemperature[r] = baseTemperature;
-
-        // wind
-        let blownTo_r;
-        try {
-            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
-        } catch (error) {
-            console.error(error);
-            blownTo_r = r;
-        }
-
-        if (!r_blownFrom[blownTo_r]) r_blownFrom[blownTo_r] = [];
-        r_blownFrom[blownTo_r].push(r); 
-    }
-
-    // diffusion
-    for (let r = 0; r < numRegions; r++) {
-        let r_out = [];
-        mesh.r_circulate_r(r_out, r);
-        let neighborAverage = 0;
-        for (let neighbor_r of r_out) {
-            neighborAverage += r_temperature[neighbor_r];
-        }
-        neighborAverage /= r_out.length;
-        if (r_out.length == 0)  console.error("no neighbors");
-
-        r_newTemperature[r] = (3/4) * r_newTemperature[r] + (1/4) * neighborAverage;
-    }
-    
-    // account for rain
-    for(let r = 0; r < numRegions; r++) {
-        // rain occurs above cloud value 0.5
-        r_newTemperature[r] -= 2 * Math.max(0, r_clouds[r]-0.5);
-    }
-
-    // account for wind
-    for(let r = 0; r < numRegions; r++) {
-        // temperature blown in from neighbors
-        let blownTemperatures = r_blownFrom[r] 
-            ? r_blownFrom[r].map(neighbor_r => r_newTemperature[neighbor_r])
-            : [r_newTemperature[r]];
-        if (blownTemperatures.length === 0) blownTemperatures = [r_newTemperature[r]];
-
-        let tempBlown = average(blownTemperatures);
-        r_newTemperature[r] = (r_newTemperature[r] + tempBlown) / 2;
-
-        // cooldown from wind blowing
-        r_newTemperature[r] -= 2*(util.magnitude(r_wind[r]) - 0.01);
-    }
-
-    // finalize
-    // TODO: try putting humidity and temperature through a sigmoid funciton
-    for (let r = 0; r < numRegions; r++) {
-        r_temperature[r] = r_newTemperature[r]; //Math.max(0, 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]));
-    }
-}
-
-function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_temperature, /* in/out */ r_humidity}) {
-    const planetRadius = 1;
-    let {numRegions} = mesh;
-    let r_newHumidity = new Array(numRegions);
-    let blownHumidity = new Array(numRegions);
-    blownHumidity.fill([]);
-    
-    const PERSISTENCE = 0.8;
-
-    for (let r = 0; r < numRegions; r++) {
-        // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
-        // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
-        //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
-
-        // base humidity
-        let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
-
-        // // average with old humidity
-        // r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
-
-        r_newHumidity[r] = PERSISTENCE*r_humidity[r] + (1-PERSISTENCE)*baseHumidity;
-
-        // wind
-        let blownTo_r;
-        try {
-            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
-        } catch (error) {
-            console.error(error);
-            blownTo_r = r;
-        }
+//         // base temperature
+//         let baseTemperature = util.clamp(0, 1, (1-r_elevation[r]) * (90 - Math.abs(lat_deg)) / 90);
         
-        if (!blownHumidity[blownTo_r]) blownHumidity[blownTo_r] = [];
-        blownHumidity[blownTo_r].push(r_humidity[r]); 
-    }
+//         baseTemperature = PERSISTENCE*r_temperature[r] + (1-PERSISTENCE)*baseTemperature;
 
-    // account for rain
-    for(let r = 0; r < numRegions; r++) {
-        // rain occurs above cloud value 0.5
-        r_newHumidity[r] -= 0.01*2*Math.max(0, r_clouds[r]-0.5);
-    }
+//         // account for cloud cover
+//         if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
+//         baseTemperature -= 2 * (1-Math.max(1, 2*r_clouds[r]));
 
-    // account for wind
-    // TODO: do the humidity blown, humidity kept thing from clouds
-    for(let r = 0; r < numRegions; r++) {
-        let humidityBlown = average(blownHumidity[r] ? blownHumidity[r] : [r_newHumidity[r]]);
-        // if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
+//         // average with old temperature
+//         // r_newTemperature[r] = 0.25 * baseTemperature + 0.75 * r_temperature[r];
+//         r_newTemperature[r] = baseTemperature;
 
-        r_newHumidity[r] = (r_newHumidity[r] + humidityBlown) / 2;
-        // r_temperature[r] += 0.5*(util.magnitude(r_wind[r]) - 5);
-    }
+//         // wind
+//         let blownTo_r;
+//         try {
+//             blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+//         } catch (error) {
+//             console.error(error);
+//             blownTo_r = r;
+//         }
+
+//         if (!r_blownFrom[blownTo_r]) r_blownFrom[blownTo_r] = [];
+//         r_blownFrom[blownTo_r].push(r); 
+//     }
+
+//     // diffusion
+//     for (let r = 0; r < numRegions; r++) {
+//         let r_out = [];
+//         mesh.r_circulate_r(r_out, r);
+//         let neighborAverage = 0;
+//         for (let neighbor_r of r_out) {
+//             neighborAverage += r_temperature[neighbor_r];
+//         }
+//         neighborAverage /= r_out.length;
+//         if (r_out.length == 0)  console.error("no neighbors");
+
+//         r_newTemperature[r] = (3/4) * r_newTemperature[r] + (1/4) * neighborAverage;
+//     }
     
-    // diffusion
-    for (let r = 0; r < numRegions; r++) {
-        let r_out = [];
-        mesh.r_circulate_r(r_out, r);
-        let neighborAverage = 0;
-        for (let neighbor_r of r_out) {
-            neighborAverage += r_newHumidity[neighbor_r];
-        }
-        neighborAverage /= r_out.length;
+//     // account for rain
+//     for(let r = 0; r < numRegions; r++) {
+//         // rain occurs above cloud value 0.5
+//         r_newTemperature[r] -= 2 * Math.max(0, r_clouds[r]-0.5);
+//     }
 
-        r_newHumidity[r] = (3/4) * r_newHumidity[r] + (1/4) * neighborAverage;
-    }
+//     // account for wind
+//     for(let r = 0; r < numRegions; r++) {
+//         // temperature blown in from neighbors
+//         let blownTemperatures = r_blownFrom[r] 
+//             ? r_blownFrom[r].map(neighbor_r => r_newTemperature[neighbor_r])
+//             : [r_newTemperature[r]];
+//         if (blownTemperatures.length === 0) blownTemperatures = [r_newTemperature[r]];
 
-    // finalize
-    // TODO: try putting humidity and temperature through a sigmoid funciton
-    for (let r = 0; r < numRegions; r++) {
-        r_humidity[r] = Math.max(0, r_newHumidity[r]);
-    }
-}
+//         let tempBlown = average(blownTemperatures);
+//         r_newTemperature[r] = (r_newTemperature[r] + tempBlown) / 2;
 
-function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /* out */ r_clouds}) {
-    const planetRadius = 1;
-    let {numRegions} = mesh;
-    let r_newClouds = new Array(numRegions);
-    r_newClouds.fill(0);
-    let blownClouds = new Array(numRegions);
+//         // cooldown from wind blowing
+//         r_newTemperature[r] -= 2*(util.magnitude(r_wind[r]) - 0.01);
+//     }
+
+//     // finalize
+//     // TODO: try putting humidity and temperature through a sigmoid funciton
+//     for (let r = 0; r < numRegions; r++) {
+//         r_temperature[r] = r_newTemperature[r]; //Math.max(0, 0.5*(0.5*r_baseTemperature[r] + 0.5*r_newTemperature[r]));
+//     }
+// }
+
+// function reassignRegionHumidity(mesh, {r_xyz, r_elevation, r_wind, r_clouds, r_temperature, /* in/out */ r_humidity}) {
+//     const planetRadius = 1;
+//     let {numRegions} = mesh;
+//     let r_newHumidity = new Array(numRegions);
+//     let blownHumidity = new Array(numRegions);
+//     blownHumidity.fill([]);
     
-    let cloudChallenge = 2;
-    let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge) / 2;
+//     const PERSISTENCE = 0.8;
 
-    for (let r = 0; r < numRegions; r++) {
-        // new clouds
-        // note: this is not the method used by the reference; I wanted to have a continuous cloud system instead of a discrete one
-        //r_newClouds[r] += (1-r_temperature[r]) * r_humidity[r];
-        r_newClouds[r] = cloudFactorCalc(1-r_temperature[r]) * cloudFactorCalc(r_humidity[r]);
+//     for (let r = 0; r < numRegions; r++) {
+//         // let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
+//         // let lat_deg = (180/Math.PI) * Math.acos(Math.abs(z) / planetRadius), 
+//         //     lon_deg = (180/Math.PI) * Math.atan2(y, x);
 
-        // keep existing clouds, but discount some dissapation rate
-        if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
-        r_newClouds[r] += 0.8*r_clouds[r];
+//         // base humidity
+//         let baseHumidity = reigonIsWater(r_elevation, r) ? 0.5 * r_temperature[r] : 0;
 
-        // if it's raining, decrease the cloud level
-        // note: it's raining when clouds are above 0.5
-        r_newClouds[r] -= 2*Math.max(0, r_clouds[r] - 0.5);
+//         // // average with old humidity
+//         // r_newHumidity[r] = 1.25 * baseHumidity + 0.5 * r_humidity[r];
 
-        // wind
-        let blownTo_r;
-        try {
-            blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
-        } catch (error) {
-            console.error(error);
-            blownTo_r = r;
-        }
+//         r_newHumidity[r] = PERSISTENCE*r_humidity[r] + (1-PERSISTENCE)*baseHumidity;
+
+//         // wind
+//         let blownTo_r;
+//         try {
+//             blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+//         } catch (error) {
+//             console.error(error);
+//             blownTo_r = r;
+//         }
         
-        let windspeed = util.magnitude(r_wind[r]);
-        let cloudsBlown =r_newClouds[r]; //Math.max(0, Math.min(1, windspeed / 0.04)) * r_newClouds[r];
-        let cloudsKept = 0;//(1-Math.max(0, Math.min(1, windspeed / 0.04))) * r_newClouds[r];
-        r_newClouds[r] = cloudsKept;
+//         if (!blownHumidity[blownTo_r]) blownHumidity[blownTo_r] = [];
+//         blownHumidity[blownTo_r].push(r_humidity[r]); 
+//     }
+
+//     // account for rain
+//     for(let r = 0; r < numRegions; r++) {
+//         // rain occurs above cloud value 0.5
+//         r_newHumidity[r] -= 0.01*2*Math.max(0, r_clouds[r]-0.5);
+//     }
+
+//     // account for wind
+//     // TODO: do the humidity blown, humidity kept thing from clouds
+//     for(let r = 0; r < numRegions; r++) {
+//         let humidityBlown = average(blownHumidity[r] ? blownHumidity[r] : [r_newHumidity[r]]);
+//         // if (isNaN(blownHumidity[r])) blownHumidity[r] = r_humidity[r]; // some tiles don't get wind blowing onto them
+
+//         r_newHumidity[r] = (r_newHumidity[r] + humidityBlown) / 2;
+//         // r_temperature[r] += 0.5*(util.magnitude(r_wind[r]) - 5);
+//     }
+    
+//     // diffusion
+//     for (let r = 0; r < numRegions; r++) {
+//         let r_out = [];
+//         mesh.r_circulate_r(r_out, r);
+//         let neighborAverage = 0;
+//         for (let neighbor_r of r_out) {
+//             neighborAverage += r_newHumidity[neighbor_r];
+//         }
+//         neighborAverage /= r_out.length;
+
+//         r_newHumidity[r] = (3/4) * r_newHumidity[r] + (1/4) * neighborAverage;
+//     }
+
+//     // finalize
+//     // TODO: try putting humidity and temperature through a sigmoid funciton
+//     for (let r = 0; r < numRegions; r++) {
+//         r_humidity[r] = Math.max(0, r_newHumidity[r]);
+//     }
+// }
+
+// function reassignRegionClouds(mesh, {r_xyz, r_wind, r_temperature, r_humidity, /* out */ r_clouds}) {
+//     const planetRadius = 1;
+//     let {numRegions} = mesh;
+//     let r_newClouds = new Array(numRegions);
+//     r_newClouds.fill(0);
+//     let blownClouds = new Array(numRegions);
+    
+//     let cloudChallenge = 2;
+//     let cloudFactorCalc = x => (x + 1) * Math.pow(x, cloudChallenge) / 2;
+
+//     for (let r = 0; r < numRegions; r++) {
+//         // new clouds
+//         // note: this is not the method used by the reference; I wanted to have a continuous cloud system instead of a discrete one
+//         //r_newClouds[r] += (1-r_temperature[r]) * r_humidity[r];
+//         r_newClouds[r] = cloudFactorCalc(1-r_temperature[r]) * cloudFactorCalc(r_humidity[r]);
+
+//         // keep existing clouds, but discount some dissapation rate
+//         if (isNaN(r_clouds[r])) r_clouds[r] = 0; // I have no idea how r_clouds[r] can ever be NaN, so this line is my bandaid
+//         r_newClouds[r] += 0.8*r_clouds[r];
+
+//         // if it's raining, decrease the cloud level
+//         // note: it's raining when clouds are above 0.5
+//         r_newClouds[r] -= 2*Math.max(0, r_clouds[r] - 0.5);
+
+//         // wind
+//         let blownTo_r;
+//         try {
+//             blownTo_r = getNeighbor(mesh, r, r_wind[r], {r_xyz});    
+//         } catch (error) {
+//             console.error(error);
+//             blownTo_r = r;
+//         }
         
-        if (isNaN(r_newClouds[r])) {
-            console.log({cloudsBlown, cloudsKept, windspeed, temperature: r_temperature[r], humidity: r_humidity[r]})
-            crash
-        }
+//         let windspeed = util.magnitude(r_wind[r]);
+//         let cloudsBlown =r_newClouds[r]; //Math.max(0, Math.min(1, windspeed / 0.04)) * r_newClouds[r];
+//         let cloudsKept = 0;//(1-Math.max(0, Math.min(1, windspeed / 0.04))) * r_newClouds[r];
+//         r_newClouds[r] = cloudsKept;
+        
+//         if (isNaN(r_newClouds[r])) {
+//             console.log({cloudsBlown, cloudsKept, windspeed, temperature: r_temperature[r], humidity: r_humidity[r]})
+//             crash
+//         }
 
-        if (!blownClouds[blownTo_r]) blownClouds[blownTo_r] = [];
-        blownClouds[blownTo_r].push(cloudsBlown); 
-    }
+//         if (!blownClouds[blownTo_r]) blownClouds[blownTo_r] = [];
+//         blownClouds[blownTo_r].push(cloudsBlown); 
+//     }
     
-    for (let r = 0; r < numRegions; r++) {
-        let cloudsBlown = sum(blownClouds[r] ? blownClouds[r] : [r_newClouds[r]]);
-        // if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
-        r_newClouds[r] += cloudsBlown;
-    }
+//     for (let r = 0; r < numRegions; r++) {
+//         let cloudsBlown = sum(blownClouds[r] ? blownClouds[r] : [r_newClouds[r]]);
+//         // if (isNaN(blownClouds[r])) blownClouds[r] = r_clouds[r];
+//         r_newClouds[r] += cloudsBlown;
+//     }
 
     
-    // diffusion and finalize
-    for (let r = 0; r < numRegions; r++) {
-        let r_out = [];
-        mesh.r_circulate_r(r_out, r);
-        let neighborAverage = 0;
-        for (let neighbor_r of r_out) {
-            neighborAverage += r_newClouds[neighbor_r];
-        }
-        neighborAverage /= r_out.length;
+//     // diffusion and finalize
+//     for (let r = 0; r < numRegions; r++) {
+//         let r_out = [];
+//         mesh.r_circulate_r(r_out, r);
+//         let neighborAverage = 0;
+//         for (let neighbor_r of r_out) {
+//             neighborAverage += r_newClouds[neighbor_r];
+//         }
+//         neighborAverage /= r_out.length;
 
-        r_clouds[r] = (1/4) * r_newClouds[r] + (3/4) * neighborAverage;
-        r_clouds[r] = Math.min(1, Math.max(0, r_clouds[r]));
-    }
+//         r_clouds[r] = (1/4) * r_newClouds[r] + (3/4) * neighborAverage;
+//         r_clouds[r] = Math.min(1, Math.max(0, r_clouds[r]));
+//     }
     
-    // // finalize
-    // for (let r = 0; r < numRegions; r++) {
-    //     r_clouds[r] = r_newClouds[r];
-    // }
+//     // // finalize
+//     // for (let r = 0; r < numRegions; r++) {
+//     //     r_clouds[r] = r_newClouds[r];
+//     // }
 
-    // statsAnalysis(r_clouds)
-}
+//     // statsAnalysis(r_clouds)
+// }
 
 function advanceWeather(mesh, map) {
     assignRegionWindVectors(mesh, map);
-    reassignRegionTemperature(mesh, map);
-    reassignRegionHumidity(mesh, map);
-    reassignRegionClouds(mesh, map);
+    assignRegionTemperature(mesh, map);
+    assignRegionHumidity(mesh, map);
+    assignRegionClouds(mesh, map);
 
     globeNeedsRedraw = true;
 
@@ -1050,6 +1135,7 @@ function generateMesh() {
     map.s_flow = new Float32Array(mesh.numSides);
     map.r_wind = new Array(mesh.numRegions);
     map.r_temperature = new Array(mesh.numRegions);
+    map.r_watertemperature = new Array(mesh.numRegions);
     map.r_humidity = new Array(mesh.numRegions);
     map.r_clouds = new Array(mesh.numRegions);
     
@@ -1082,9 +1168,9 @@ function generateMap() {
     assignFlow(mesh, map);
 
     assignRegionClouds(mesh, map);
-    assignRegionWindVectors(mesh, map);
     assignRegionTemperature(mesh, map);
     assignRegionHumidity(mesh, map);
+    assignRegionWindVectors(mesh, map);
 
     quadGeometry.setMap(mesh, map);
     draw();
@@ -1105,7 +1191,7 @@ function _draw() {
 
             draw_plateVectors,
             draw_plateBoundaries,
-            draw_windVectors,
+            draw_windVectors: true,
             draw_normalVectors,
             draw_equator,
             draw_extraLat,
@@ -1131,6 +1217,10 @@ function _draw() {
 
             draw_axis: false,
             centerLon: map_centerLon,
+
+            dx: map_dx,
+            dy: map_dy,
+            zoom: map_zoom,
         },
     });
     mapNeedsRedraw = false;

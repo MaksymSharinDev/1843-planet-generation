@@ -73,8 +73,13 @@ Map Controls
 CenterLon: <input type="range" min="-360" max="360" step="0.001" value="0" oninput="setMapCenterLon(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
 <br/>
 
+Zoom: <input type="range" min="0.5" max="3" step="0.001" value="1" oninput="setMapZoom(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+dx: <input type="range" min="-0.9" max="0.9" step="0.001" value="0" oninput="setMapDX(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+dy: <input type="range" min="-0.9" max="0.9" step="0.001" value="0" oninput="setMapDY(this.valueAsNumber)" style="width:50ex" autocomplete="off"/>
+<br/>
+
 <figure>
-  <canvas id="map" width="2048" height="2048"/>
+  <canvas id="map" width="1024" height="1024"/>
 </figure>
 
 <script src="./build.js"></script>

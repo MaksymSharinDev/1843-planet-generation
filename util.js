@@ -52,8 +52,16 @@ function xyzToLatLon_rad(x, y, z) {
 
         if (z >= 0) {
             // if (Math.pow(Math.atan(z/x), 2) < 2 - Math.pow(Math.asin(y / r),2)) return Math.PI; // this is the case where things go sideways
-            
-            return Math.atan(z/x) + 1.5*Math.PI; //2*Math.PI; // this *2 arguably makes it worse, but lets lines render for some reason
+            // there's some set of x,z such that Math.atan(z/x) ~= sqrt(2 - Math.pow(Math.asin(y / r),2))) when it should ~= pi/2
+            // find that set
+
+            // let expval = Math.sqrt(2 - Math.pow(Math.asin(y / r),2));
+            // let explat = Math.abs(Math.atan(z/x));
+            // let epsilon = 0.1;
+            // if (expval - epsilon <= explat && explat <= expval + epsilon) return 1.5*Math.PI;
+
+            // do 1.5*Math.PI to view the map, leave it as Math.PI for accurate wind vectors
+            return Math.atan(z/x) + Math.PI; //2*Math.PI; // this *2 arguably makes it worse, but lets lines render for some reason
         } else {
             return Math.atan(z/x) - Math.PI;
         }
@@ -180,4 +188,59 @@ function statsAnalysis(data, do_histogram=false) {
     console.log({min, max, average, stddev, bins: bins+"", bins_stepsize:stepsize});
 }
 
-module.exports = { statsAnalysis, statsAnalysis_neighborsDistance, statsAnalysis_vectorMagnitude, test_xyzlatlon, normalize, vectorSubtract, dot, magnitude, xyzFromLatLon_rad, xyzToLatLon_rad,  xyzFromLatLon_deg, xyzToLatLon_deg, RAD2DEG, DEG2RAD};
+function clamp(min, max, val) {
+    return Math.min(max, Math.max(min, val));
+}
+
+/*
+    Takes:
+        a [delta_lattitude, delta_longitude] vector (in degrees),
+        the location on the sphere [lattitude, longitude] (in degrees) where the vector's origin is,
+        and the xyz location corresponding to the latlon location
+
+    Returns the vector in cartesian coordinates
+*/
+function deg_latlonVectorAt_to_xyzVector(latlonVec_deg, latlonAt_deg, [x, y, z]) {
+    let [lat_deg, lon_deg] = latlonAt_deg;
+    let [dtheta, dphi] = latlonVec_deg;
+    
+    let pointsTo_lat_deg = lat_deg + dphi,
+        pointsTo_lon_deg = lon_deg + dtheta;
+    let [pointsTo_x, pointsTo_y, pointsTo_z] = xyzFromLatLon_deg(pointsTo_lat_deg, pointsTo_lon_deg);
+
+    return [
+        pointsTo_x - x,
+        pointsTo_y - y,
+        pointsTo_z - z
+    ];
+}
+
+function setMagnitude(xyzVector, targetMagnitude) {
+    let [x, y, z] = xyzVector;
+    let mag = magnitude(xyzVector);
+    let scale = targetMagnitude / mag;
+    return [scale*x, scale*y, scale*z];
+}
+
+module.exports = { 
+    clamp, 
+
+    statsAnalysis, 
+    statsAnalysis_neighborsDistance, 
+    statsAnalysis_vectorMagnitude, 
+
+    normalize, 
+    vectorSubtract, 
+    dot, 
+    magnitude, 
+    setMagnitude,
+
+    test_xyzlatlon, 
+    xyzFromLatLon_rad, 
+    xyzToLatLon_rad, 
+    xyzFromLatLon_deg, 
+    xyzToLatLon_deg, 
+    RAD2DEG, 
+    DEG2RAD,
+    deg_latlonVectorAt_to_xyzVector
+};

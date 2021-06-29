@@ -35,18 +35,16 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
     
     // let test = [];
 
-    // let badTriangles = []; // foreach (x) => x and the next 8 elements are bad data (ie, 3 xyz triples starting at idx x)
-    // let lastxyz;
-    // let lastsrcxyz;
-    // let count = 0;
+    let badTriangles = []; // foreach (x) => x and the next 8 elements are bad data (ie, 3 xyz triples starting at idx x)
+    let lastxyz;
+    let lastsrcxyz;
+    let count = 0;
     // let output = [];
     
     for (let r = 0; r < r_xyz.length/3; r++) {
         let [x, y, z] = r_xyz.slice(3 * r, 3 * r + 3);
         let [nx, ny, nz] = projection([x, y, z], centerLat, centerLon, planetRadius);
-        result.push(nx);
-        result.push(ny);
-        result.push(nz);
+        
         
         min = Math.min(nx, min);
         max = Math.max(nx, max);
@@ -56,12 +54,30 @@ exports.createProjection = (projection, r_xyz, centerLat=0, centerLon=0, planetR
         max = Math.max(nz, max);
 
         // if (count > 0 && util.magnitude(lastxyz, [nx, ny, nz]) > 1) {
-        //     badTriangles.push(r-count);
-        //     output.push([x, y, z] + " ; " + lastsrcxyz + " -> " + util.xyzToLatLon_deg(x, y, z) + " ; " + util.xyzToLatLon_deg(...lastsrcxyz) + " -> " + [nx, ny, nz] + " ; " + lastxyz);
+        // if (count > 0){
+            // let lon1 = util.xyzToLatLon_deg(x, y, z)[1];
+            // let lon2 = util.xyzToLatLon_deg(...lastxyz)[1];
+            // if (count > 0 && Math.abs(lon1 - lon2) > 179) {
+            //     // badTriangles.push(r-count);
+            //     nx = lastxyz[0];
+            //     ny = lastxyz[1];
+            //     nz = lastxyz[2];
+            //     console.log("bad triangle detected");
+            //     console.log(lon1 + " ~ " + lon2)
+            //     // output.push([x, y, z] + " ; " + lastsrcxyz + " -> " + util.xyzToLatLon_deg(x, y, z) + " ; " + util.xyzToLatLon_deg(...lastsrcxyz) + " -> " + [nx, ny, nz] + " ; " + lastxyz);
+            // }
         // }
         // lastxyz = [nx, ny, nz];
         // lastsrcxyz = [x, y, z];
         // count = (count+1) % 3;
+
+
+
+        result.push(nx);
+        result.push(ny);
+        result.push(nz);
+
+
 
         // if (-0.1 < nx && nx < 0.1) {
         //     xdata.push(x);

@@ -502,6 +502,10 @@ let defaultOptions = {
     procession: 0,
     tilt: 0,
     rotation: 0,
+    dx: 0,
+    dy: 0,
+    zoom: 1,
+
     layer: "surface", // "temperature", "surfaceonly", ...
     generateVoronoiGeometry: null,
 
@@ -573,8 +577,9 @@ function draw(options) {
 
         let u_projection = mat4.create();
         mat4.scale(u_projection, u_projection, [1, 1, 0.5]); // avoid clipping
-        mat4.scale(u_projection, u_projection, [0.8, 0.8, 0.8]); // give the planet some room to breathe
-        
+        mat4.scale(u_projection, u_projection, [envOptions.zoom*0.8, envOptions.zoom*0.8, envOptions.zoom*0.8]); // give the planet some room to breathe
+        mat4.translate(u_projection, u_projection, [envOptions.dx, envOptions.dy, 0]);
+
         mat4.rotateZ(u_projection, u_projection, util.DEG2RAD * envOptions.tilt);
         mat4.rotateX(u_projection, u_projection, util.DEG2RAD * envOptions.procession);
         mat4.rotateY(u_projection, u_projection, util.DEG2RAD * envOptions.rotation);
