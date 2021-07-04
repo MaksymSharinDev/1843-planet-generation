@@ -837,11 +837,55 @@ function assignRegionTemperature(mesh, {r_xyz, r_elevation, r_wind, r_clouds, /*
 
 function assignRegionHumidity(mesh, {r_elevation, r_temperature, /* out */ r_humidity}) {
     let {numRegions} = mesh;
+    let blownHumidity_r = new Array(numRegions);
+
+    for (let r = 0; r < numRegions; r++) {
+        let neighbors = util.getNeighbors(mesh, r, r_wind[r], {r_xyz});
+        neighbors.add(r)
+
+        for each neighbor_r
+            blownHumidity_r[neighbor_r].add(humidity_r[r] / neighbors.length);
+    }
 
     for (let r = 0; r < numRegions; r++) {
         // TODO: base humidity on water temperature, not air temperature
         // r_humidity[r] = reigonIsWater(r_elevation, r) ? r_watertemperature[r] * r_watertemperature[r] + 0.1 : 0;
-        r_humidity[r] = reigonIsWater(r_elevation, r) ? r_temperature[r] * r_temperature[r] + 0.1 : 0;
+        let baseHumidity = reigonIsWater(r_elevation, r) ? r_temperature[r] * r_temperature[r] + 0.1 : 0;
+    
+        // r_watertemperature[r] = baseTemperature;
+
+        if (r_humidity[r] === undefined || r_temperature[r] === undefined || r_clouds[r] === undefined) {
+            r_humidity[r] = baseHumidity;
+            continue;
+        }
+
+        // diffusion
+        let r_out = [];
+        mesh.r_circulate_r(r_out, r);
+        let neighborAverage = 0;
+        for (let neighbor_r of r_out) {
+            neighborAverage += r_humidity[neighbor_r];
+        }
+        neighborAverage /= r_out.length;
+        if (r_out.length === 0)  console.error("no neighbors");
+        
+        // I need the blownTo humidity
+        let blownHumidity = r_humidity[r]; // = avg(blownhumidity_r[r])
+
+        let addWater = 0;
+        if(reigonIsWater(r_elevation[r], r)) {
+            addWater = 0.05 * r_temperature[r] * (1-r_clouds[r]);
+        }
+
+        
+        // a medium amount of rain (r_clouds[r] === 0.75) means -0.8 humidity multiplier
+        let addRain = -r_humidity[r]*0.8* Math.max(0, (r_clouds[r] - 0.5) / 0.25);
+
+
+        let prevTempIgnoringBase = blownHumidity + (1-baseHumidity);
+        let newBase = (3/4) * r_humidity[r] + (1/4) * neighborAverage;
+        r_humidity[r] = util.clamp(0,1, newBase + 0.8*(1-prevTempIgnoringBase)*(addSun) - 0.6*(prevTempIgnoringBase)*(addRain+addCool) );
+    
     }
 }
 
