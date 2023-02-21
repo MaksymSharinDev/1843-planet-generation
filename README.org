@@ -1,7 +1,17 @@
-# This is a fork of a fork of redblobgames' project. 
-I will use this repo to reverse engineer the code and refactor it in a way that is more readable and understandable.
-Code map: 
-![](./functionsMap.png)
+
+
+*** @MaksymSharinDev This is a fork of a fork of redblobgames' project. 
+*** I will use this repo to reverse engineer the code and refactor it in a way that is more readable and understandable.
+
+Code map:
+
+
+[[https://github.com/MaksymSharinDev/1843-planet-generation/blob/master/functionsMap.png]]
+
+------------------------------
+
+
+
 
 # This is a fork of redblobgames' project. See original README below
 
