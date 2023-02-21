@@ -1,6 +1,6 @@
 {
-    "name": "@redblobgames/1843-planet-generation",
-    "version": "1.0.0",
+    "name": "@claydigiorgio/1843-planet-generation",
+    "version": "1.1.0",
     "private": true,
     "license": "Apache-2.0",
     "dependencies": {
@@ -17,7 +17,8 @@
         "@types/browserify": "*"
     },
     "scripts": {
-        "build": "browserify planet-generation.js -o build/_bundle.js",
-        "watch": "budo planet-generation.js:build/_bundle.js --dir . --dir ../../ --live --onupdate 'yarn run build'"
-    }
+        "build": "browserify planet-generation.js -o build.js",
+        "watch": "budo planet-generation.js:build.js --dir . --dir ../../ --live --onupdate 'yarn run build'"
+    },
+    "homepage": "https://claydigiorgio.github.io/1843-planet-generation"
 }
